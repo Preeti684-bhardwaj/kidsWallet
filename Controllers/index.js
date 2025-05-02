@@ -16,7 +16,7 @@ class BaseController {
   initializeRoutes() {
     this.router.post('/list', this.listWithReferences.bind(this));
     this.router.get('/detail',authenticateToken, this.read.bind(this));
-    this.router.get('/:id', this.read.bind(this));
+    // this.router.get('/:id', this.read.bind(this));
     this.router.post('/', this.create.bind(this));
     this.router.put('/detail',authenticateToken, this.update.bind(this));
     this.router.put('/:id', this.update.bind(this));

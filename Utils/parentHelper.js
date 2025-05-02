@@ -10,7 +10,7 @@ const generateToken = (user) => {
       };
     }
     return jwt.sign({ obj: user }, process.env.JWT_SECRET, {
-      expiresIn: "72h",
+      expiresIn: "7d",
     });
   } catch (error) {
     console.error("Token generation error:", error);
@@ -43,5 +43,25 @@ const generateOTP = () => {
   }
 };
 
+function calculateNextDueDate(currentDate, frequency) {
+  const nextDate = new Date(currentDate);
+  
+  switch (frequency) {
+    case 'daily':
+      nextDate.setDate(nextDate.getDate() + 1);
+      break;
+    case 'weekly':
+      nextDate.setDate(nextDate.getDate() + 7);
+      break;
+    case 'monthly':
+      nextDate.setMonth(nextDate.getMonth() + 1);
+      break;
+    default:
+      nextDate.setDate(nextDate.getDate() + 1);
+  }
+  
+  return nextDate;
+}
 
-module.exports = { generateOTP, generateToken };
+
+module.exports = { generateOTP, generateToken,calculateNextDueDate };

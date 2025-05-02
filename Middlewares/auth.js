@@ -55,3 +55,40 @@ exports.verifyUserAgent = async (req, res, next) => {
     return next(new ErrorHandler(error.message, 500));
   }
 };
+
+exports.authenticateChildToken = async (req, res, next) => {
+  try {
+    // Get the token from Authorization header
+    const bearerHeader = req.headers["authorization"];
+console.log("hii i m in auth");
+
+    // Check if bearer header exists
+    if (!bearerHeader) {
+      return next(new ErrorHandler("Access Denied.", 401));
+    }
+
+    // Extract the token
+    // Format in Postman: "Bearer eyJhbGciOiJIUzI1NiIs..."
+    const token = bearerHeader.replace("Bearer ", "").trim();
+
+    if (!token) {
+      return next(new ErrorHandler("Authentication token required.", 401));
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log(decoded);
+    const childId = decoded.obj.id;
+    // Find child
+    const child = await models.Child.findOne({
+      where: { id: childId },
+      attributes: { exclude: ["password"] },
+    });
+
+    if (!child) {
+      return res.status(404).json({ error: "Child not found" });
+    }
+    req.child = child;
+    next();
+  } catch (error) {
+    return res.status(403).json({ error: "Invalid token" });
+  }
+};

@@ -10,14 +10,12 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
-    //   countryCode: {
-    //     type: DataTypes.STRING,
-    //     allowNull: false,
-    //   },
-    //   phone:{
-    //     type: DataTypes.STRING,
-    //     allowNull: false,
-    //   },
+      countryCode: {
+        type: DataTypes.STRING,
+      },
+      phone:{
+        type: DataTypes.STRING,
+      },
       password: {
         type: DataTypes.STRING,
         allowNull: false,
