@@ -73,6 +73,8 @@ class ParentController extends BaseController {
       authenticateToken,
       this.getParentNotifications.bind(this)
     );
+    this.router.delete("/delete/parent-by-email", this.deleteUserByEmail.bind(this));
+
   }
 
   // Override BaseController's listArgVerify to add user-specific query logic
@@ -1002,6 +1004,32 @@ class ParentController extends BaseController {
       );
     }
   });
+  deleteUserByEmail = asyncHandler(async (req, res, next) => {
+    try {
+      const { email } = req.query;
+  
+      if (!email || email.trim() === "") {
+        return next(new ErrorHandler("Email is required", 400));
+      }
+  
+      const lowercaseEmail = email.trim().toLowerCase();
+  
+      const user = await models.Parent.findOne({ where: { email: lowercaseEmail } });
+  
+      if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+  
+      await user.destroy();
+  
+      res.status(200).json({
+        message: "User deleted successfully",
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  });
+  
 
   //---------- Delete parent profile----------------------
   //   deleteProfile = asyncHandler(async (req, res) => {
