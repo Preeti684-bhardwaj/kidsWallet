@@ -18,10 +18,16 @@ const models = {
     Transaction: require('./transactionModal')(db.sequelize, db.Sequelize.DataTypes),
 }
 // Define relationships
-models.Parent.hasMany(models.Child, { foreignKey: 'parentId' });
-models.Child.belongsTo(models.Parent, { foreignKey: 'parentId' });
+models.Parent.hasMany(models.Child, {
+    foreignKey: 'parentId',
+    onDelete: 'CASCADE',
+    hooks: true
+  });
+  models.Child.belongsTo(models.Parent, { foreignKey: 'parentId' });
 
-models.Parent.hasMany(models.Task, { foreignKey: 'parentId' });
+models.Parent.hasMany(models.Task, { foreignKey: 'parentId' ,
+    onDelete: 'CASCADE',
+    hooks: true});
 models.Child.hasMany(models.Task, { foreignKey: 'childId' });
 models.Task.belongsTo(models.Parent, { foreignKey: 'parentId' });
 models.Task.belongsTo(models.Child, { foreignKey: 'childId' });
@@ -31,7 +37,9 @@ models.Transaction.belongsTo(models.Child, { foreignKey: 'childId' });
 models.Task.hasMany(models.Transaction, { foreignKey: 'taskId' });
 models.Transaction.belongsTo(models.Task, { foreignKey: 'taskId' });
 
-models.Child.hasOne(models.Streak, { foreignKey: 'childId' });
+models.Child.hasOne(models.Streak, { foreignKey: 'childId' ,
+    onDelete: 'CASCADE',
+    hooks: true});
 models.Streak.belongsTo(models.Child, { foreignKey: 'childId' });
 
 // Child.hasMany(Blog, { foreignKey: 'authorId', as: 'authoredBlogs' });

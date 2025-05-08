@@ -24,13 +24,17 @@ cluster(async function(worker) {
       console.log("Database synchronized successfully");
       app.use('/api', router);
       // Start HTTP server
-      const server = app.listen(process.env.PORT||7991, function () {
-        let host = server.address().address
-        let port = server.address().port
-   
-        console.log("Worker listening at http://%s:%s", host, port); 
-    })
-  
+      const server = app.listen(process.env.PORT || 7991, function () {
+        const addressInfo = server.address();
+        
+        if (addressInfo && typeof addressInfo === 'object') {
+          const host = addressInfo.address === '::' ? 'localhost' : addressInfo.address;
+          const port = addressInfo.port;
+          console.log(`Worker PID ${process.pid} listening at http://${host}:${port}`);
+        } else {
+          console.warn(`Worker PID ${process.pid} started, but server.address() is null or invalid`);
+        }
+      });
       // Setup WebSocket
     //   const io = setupSocket(server);
     //   app.set("io", io);
