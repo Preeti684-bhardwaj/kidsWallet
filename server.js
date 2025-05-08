@@ -24,13 +24,9 @@ cluster(async function(worker) {
       console.log("Database synchronized successfully");
       app.use('/api', router);
       // Start HTTP server
-      const server = app.listen(process.env.PORT||7991, function () {
-        let host = server.address().address
-        let port = server.address().port
-   
-        console.log("Worker listening at http://%s:%s", host, port); 
-    })
-  
+      const server = app.listen(process.env.PORT || 7991, () => {
+  console.log(`Server listening on port ${process.env.PORT}`) ;
+});
       // Setup WebSocket
     //   const io = setupSocket(server);
     //   app.set("io", io);
