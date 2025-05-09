@@ -12,6 +12,7 @@ const {
 const { phoneValidation } = require("../Utils/phoneValidation");
 const {
   isValidEmail,
+  isValidUsernameLength,
   isValidPassword,
   isValidLength,
 } = require("../Validators/parentValidation");
@@ -73,8 +74,10 @@ class ParentController extends BaseController {
       authenticateToken,
       this.getParentNotifications.bind(this)
     );
-    this.router.delete("/delete/parent-by-email", this.deleteUserByEmail.bind(this));
-
+    this.router.delete(
+      "/delete/parent-by-email",
+      this.deleteUserByEmail.bind(this)
+    );
   }
 
   // Override BaseController's listArgVerify to add user-specific query logic
@@ -227,7 +230,7 @@ class ParentController extends BaseController {
       delete parentData.currency;
 
       res.status(201).json({
-        success:true,
+        success: true,
         message: "Parent created successfully",
         user: parentData,
       });
@@ -283,7 +286,7 @@ class ParentController extends BaseController {
       const token = generateToken(obj);
 
       return res.status(200).json({
-        success:true,
+        success: true,
         message: "Login successful",
         token,
         user: {
@@ -582,14 +585,14 @@ class ParentController extends BaseController {
       const { name, country, currency } = req.body;
       const parent = req.parent;
       // Sanitize name: trim and reduce multiple spaces to a single space
-      name.trim().replace(/\s+/g, " ");
+      const sanitizedName = name.trim().replace(/\s+/g, " ");
       // Validate name
-      const nameError = isValidLength(name);
+      const nameError = isValidLength(sanitizedName);
       if (nameError) {
         return next(new ErrorHandler(nameError, 400));
       }
       // Update allowed fields
-      if (name) parent.name = name;
+      if (name) parent.name = sanitizedName;
       if (country) parent.country = country;
       if (currency) parent.currency = currency;
 
@@ -624,7 +627,29 @@ class ParentController extends BaseController {
         hasBlogAccess,
         deviceSharingMode,
       } = req.body;
-
+      // Sanitize name: trim and reduce multiple spaces to a single space
+      const sanitizedName = name.trim().replace(/\s+/g, " ");
+      const sanatizedUsername = username.trim().replace(/\s+/g, " ");
+      console.log("sanatizeUsername", sanatizedUsername);
+      
+      // Validate name
+      const nameError = isValidLength(sanitizedName);
+      if (nameError) {
+        return next(new ErrorHandler(nameError, 400));
+      }
+      const usernameError = isValidUsernameLength(sanatizedUsername);
+      if (usernameError) {
+      console.log("usernameError", usernameError);
+        return next(new ErrorHandler(usernameError, 400));
+      }
+       // Validate the password and create a new user
+       const passwordValidationResult = isValidPassword(password);
+       if (passwordValidationResult) {
+         return next(new ErrorHandler(passwordValidationResult, 400));
+       }
+ 
+       // Hash password
+       const hashedPassword = await bcrypt.hash(password, 10);
       // Validate parent exists
       const parent = await models.Parent.findByPk(parentId);
       if (!parent) {
@@ -632,17 +657,17 @@ class ParentController extends BaseController {
       }
 
       // Check if username already exists
-      const existingChild = await models.Child.findOne({ where: { username } });
+      const existingChild = await models.Child.findOne({ where: { username:sanatizedUsername } });
       if (existingChild) {
         return next(new ErrorHandler("Username already taken", 400));
       }
 
       // Create child account
       const newChild = await models.Child.create({
-        name,
+        name:sanitizedName,
         age,
-        username,
-        password: password ? await bcrypt.hash(password, 10) : null,
+        username:sanatizedUsername,
+        password: hashedPassword || null,
         parentId,
         hasBlogAccess: hasBlogAccess || false,
         deviceSharingMode: deviceSharingMode || true,
@@ -655,6 +680,7 @@ class ParentController extends BaseController {
       });
 
       return res.status(201).json({
+        success:true,
         message: "Child account created successfully",
         data: {
           id: newChild.id,
@@ -687,13 +713,13 @@ class ParentController extends BaseController {
         isRecurring,
         recurringFrequency,
       } = req.body;
-
+  
       // Verify parent exists
       const parent = await models.Parent.findByPk(parentId);
       if (!parent) {
         return next(new ErrorHandler("Parent not found", 404));
       }
-
+  
       // Verify child belongs to parent
       const child = await models.Child.findOne({
         where: { id: childId, parentId },
@@ -706,10 +732,54 @@ class ParentController extends BaseController {
           )
         );
       }
-
+  
+      // Validate title
+      const trimmedTitle = title?.trim();
+      if (
+        !trimmedTitle ||
+        /^\d+$/.test(trimmedTitle) || // numeric-only
+        /^[^a-zA-Z0-9]+$/.test(trimmedTitle) // special characters only
+      ) {
+        return next(
+          new ErrorHandler(
+            "Invalid title. Must contain letters and not be empty, numeric-only, or special characters only.",
+            400
+          )
+        );
+      }
+  
+      // Validate coinReward
+      if (typeof coinReward !== "number" || coinReward <= 0) {
+        return next(
+          new ErrorHandler("Coin reward must be a positive number.", 400)
+        );
+      }
+  
+      // Validate dueDate is not in the past
+      if (dueDate && new Date(dueDate) < new Date()) {
+        return next(
+          new ErrorHandler("Due date cannot be in the past.", 400)
+        );
+      }
+  
+      // Prevent duplicate task for same child, title, and dueDate
+      const existingTask = await models.Task.findOne({
+        where: {
+          childId,
+          title: trimmedTitle,
+          dueDate: dueDate || null,
+        },
+      });
+  
+      if (existingTask) {
+        return next(
+          new ErrorHandler("Duplicate task for same child and time already exists.", 400)
+        );
+      }
+  
       // Create task
       const newTask = await models.Task.create({
-        title,
+        title: trimmedTitle,
         description,
         coinReward,
         difficultyLevel,
@@ -719,17 +789,17 @@ class ParentController extends BaseController {
         isRecurring: isRecurring || false,
         recurringFrequency: isRecurring ? recurringFrequency : null,
       });
-
+  
       // Create notification for child
       await models.Notification.create({
         type: "task_reminder",
-        message: `New task assigned: ${title}`,
+        message: `New task assigned: ${trimmedTitle}`,
         recipientType: "child",
         recipientId: childId,
         relatedItemType: "task",
         relatedItemId: newTask.id,
       });
-
+  
       return res.status(201).json({
         message: "Task created successfully",
         data: newTask,
@@ -741,6 +811,7 @@ class ParentController extends BaseController {
         .json({ message: "Failed to create task", error: error.message });
     }
   });
+  
 
   // ------------approve task---------------------------------
   approveTask = asyncHandler(async (req, res, next) => {
@@ -994,6 +1065,7 @@ class ParentController extends BaseController {
       );
 
       return res.status(200).json({
+        success: true,
         message: "Notifications retrieved successfully",
         data: notifications,
       });
@@ -1010,21 +1082,23 @@ class ParentController extends BaseController {
   deleteUserByEmail = asyncHandler(async (req, res, next) => {
     try {
       const { email } = req.query;
-  
+
       if (!email || email.trim() === "") {
         return next(new ErrorHandler("Email is required", 400));
       }
-  
+
       const lowercaseEmail = email.trim().toLowerCase();
-  
-      const user = await models.Parent.findOne({ where: { email: lowercaseEmail } });
-  
+
+      const user = await models.Parent.findOne({
+        where: { email: lowercaseEmail },
+      });
+
       if (!user) {
         return next(new ErrorHandler("User not found", 404));
       }
-  
+
       await user.destroy();
-  
+
       res.status(200).json({
         message: "User deleted successfully",
       });
@@ -1032,7 +1106,6 @@ class ParentController extends BaseController {
       return next(new ErrorHandler(error.message, 500));
     }
   });
-  
 
   //---------- Delete parent profile----------------------
   //   deleteProfile = asyncHandler(async (req, res) => {

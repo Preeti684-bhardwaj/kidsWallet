@@ -2,6 +2,9 @@ const db = require('../Configs/db/DbConfig');
 const sequelize = db.sequelize;
 const express = require('express');
 const models = require('../Modals/index');
+const {
+  isValidLength,
+} = require("../Validators/parentValidation");
 const { authenticateToken } = require("../Middlewares/auth");
 
 
@@ -221,24 +224,43 @@ async listWithReferences(req, res) {
   async update(req, res) {
     try {
       const id = req.parent?.id || req.params?.id;
-
-    const [updated] = await this.model.update(req.body, {
+  
+      const updateData = { ...req.body };
+  
+      // Only sanitize and validate `name` if it's provided
+      if (typeof updateData.name === "string") {
+        const sanitizedName = updateData.name.trim().replace(/\s+/g, " ");
+  
+        // Reject empty/whitespace-only name
+        if (!sanitizedName) {
+          return res.status(400).json({ error: "Name cannot be empty or whitespace" });
+        }
+  
+        const nameError = isValidLength(sanitizedName);
+        if (nameError) {
+          return res.status(400).json({ error: nameError });
+        }
+  
+        updateData.name = sanitizedName;
+      }
+  
+      const [updated] = await this.model.update(updateData, {
         where: { id: id }
-    });
-
-    if (updated) {
+      });
+  
+      if (updated) {
         const updatedItem = await this.model.findByPk(id, {
-            attributes: { exclude: ["password", "otp", "otpExpire"] },
+          attributes: { exclude: ["password", "otp", "otpExpire"] },
         });
-        res.status(200).json({status:true,data:updatedItem});
+        res.status(200).json({ status: true, data: updatedItem });
       } else {
-        res.status(404).json({ error: `Resource with id ${id} not found`  });
+        res.status(404).json({ error: `Resource with id ${id} not found` });
       }
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   }
-
+  
 async delete(req, res) {
 	try {
 		const id = req.parent?.id || req.params?.id;
