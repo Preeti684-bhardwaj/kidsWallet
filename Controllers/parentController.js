@@ -227,6 +227,7 @@ class ParentController extends BaseController {
       delete parentData.currency;
 
       res.status(201).json({
+        success:true,
         message: "Parent created successfully",
         user: parentData,
       });
@@ -281,7 +282,8 @@ class ParentController extends BaseController {
       // Generate token
       const token = generateToken(obj);
 
-      res.json({
+      return res.status(200).json({
+        success:true,
         message: "Login successful",
         token,
         user: {
@@ -292,7 +294,7 @@ class ParentController extends BaseController {
         },
       });
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      return next(new ErrorHandler(error.message, 500));
     }
   });
 
@@ -498,7 +500,7 @@ class ParentController extends BaseController {
         });
 
         parent.otp = otp;
-        parent.otpExpire = Date.now() + 10 * 60 * 1000; // 15 minutes
+        parent.otpExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
 
         await parent.save({ validate: false });
 
