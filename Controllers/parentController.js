@@ -543,7 +543,7 @@ class ParentController extends BaseController {
       const hashedPassword = await bcrypt.hash(password, 10);
 
       // Find the user by ID
-      parent = await models.Parent.findOne({
+      const parent = await models.Parent.findOne({
         where: {
           email: lowercaseEmail,
         },
