@@ -81,7 +81,7 @@ class ChildController extends BaseController {
       const child = await models.Child.findOne({
         where: { username },
         include: [
-          { model: models.Parent, as:'parent',attributes: ["id", "name", "email"] },
+          { model: models.Parent, as:'parent', attributes: ["id", "name", "email"] },
         ],
       });
 
@@ -103,6 +103,7 @@ class ChildController extends BaseController {
         const token = generateToken(obj);
 
         return res.status(200).json({
+	  success :true ,
           message: "Login successful",
           token,
           data: {

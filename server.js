@@ -24,17 +24,9 @@ cluster(async function(worker) {
       console.log("Database synchronized successfully");
       app.use('/api', router);
       // Start HTTP server
-      const server = app.listen(process.env.PORT || 7991, function () {
-        const addressInfo = server.address();
-        
-        if (addressInfo && typeof addressInfo === 'object') {
-          const host = addressInfo.address === '::' ? 'localhost' : addressInfo.address;
-          const port = addressInfo.port;
-          console.log(`Worker PID ${process.pid} listening at http://${host}:${port}`);
-        } else {
-          console.warn(`Worker PID ${process.pid} started, but server.address() is null or invalid`);
-        }
-      });
+      const server = app.listen(process.env.PORT || 7991, () => {
+  console.log(`Server listening on port ${process.env.PORT}`) ;
+});
       // Setup WebSocket
     //   const io = setupSocket(server);
     //   app.set("io", io);
