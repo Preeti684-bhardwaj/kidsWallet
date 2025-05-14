@@ -78,6 +78,11 @@ class ParentController extends BaseController {
       "/delete/parent-by-email",
       this.deleteUserByEmail.bind(this)
     );
+    this.router.get(
+      "/get_all/child",
+      authenticateToken,
+      this.getAllChildren.bind(this)
+    );    
   }
 
   // Override BaseController's listArgVerify to add user-specific query logic
@@ -699,6 +704,35 @@ class ParentController extends BaseController {
     }
   });
 
+  // -----------------get all children--------------------------------
+  getAllChildren = asyncHandler(async (req, res, next) => {
+    try {
+      const parentId = req.parent.id; 
+  
+      const parent = await models.Parent.findByPk(parentId, {
+        include: [
+          {
+            model: models.Child,
+            as: 'children',
+            attributes: ['id', 'name', 'username', 'age', 'coinBalance'],
+          },
+        ],
+      });
+  
+      if (!parent) {
+        return next(new ErrorHandler("Parent not found", 404));
+      }
+  
+      return res.status(200).json({
+        success: true,
+        children: parent.children,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  });
+  
+
   // --------create task--------------------------------------------------
   createTask = asyncHandler(async (req, res, next) => {
     try {
@@ -712,6 +746,7 @@ class ParentController extends BaseController {
         dueDate,
         isRecurring,
         recurringFrequency,
+        duration
       } = req.body;
   
       // Verify parent exists
@@ -762,6 +797,11 @@ class ParentController extends BaseController {
         );
       }
   
+      if (duration !== undefined && (typeof duration !== "number" || duration <= 0)) {
+        return next(
+          new ErrorHandler("Duration must be a positive number in minutes.", 400)
+        );
+      }
       // Prevent duplicate task for same child, title, and dueDate
       const existingTask = await models.Task.findOne({
         where: {
@@ -788,6 +828,7 @@ class ParentController extends BaseController {
         dueDate: dueDate || null,
         isRecurring: isRecurring || false,
         recurringFrequency: isRecurring ? recurringFrequency : null,
+        duration: duration || null,
       });
   
       // Create notification for child
@@ -1079,6 +1120,7 @@ class ParentController extends BaseController {
       );
     }
   });
+  
   deleteUserByEmail = asyncHandler(async (req, res, next) => {
     try {
       const { email } = req.query;

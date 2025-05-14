@@ -26,8 +26,13 @@ const Task = sequelize.define('Task', {
       defaultValue: 'assigned'
     },
     dueDate: {
-      type: DataTypes.DATE,
+      type: DataTypes.DATE,                               
       allowNull: true
+    },
+    duration: {
+      type: DataTypes.INTEGER, // Duration in minutes
+      allowNull: true,
+      comment: 'Task duration in minutes (5, 15, 30, 60, 120, etc.)'
     },
     isRecurring: {
       type: DataTypes.BOOLEAN,

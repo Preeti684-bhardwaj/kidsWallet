@@ -20,10 +20,11 @@ const models = {
 // Define relationships
 models.Parent.hasMany(models.Child, {
     foreignKey: 'parentId',
+    as: 'children',
     onDelete: 'CASCADE',
     hooks: true
   });
-  models.Child.belongsTo(models.Parent, { foreignKey: 'parentId' });
+  models.Child.belongsTo(models.Parent, { foreignKey: 'parentId' , as: 'parent'});
 
 models.Parent.hasMany(models.Task, { foreignKey: 'parentId' ,
     onDelete: 'CASCADE',
