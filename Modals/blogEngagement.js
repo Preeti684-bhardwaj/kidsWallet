@@ -1,3 +1,4 @@
+module.exports = (sequelize, DataTypes) => {
 const BlogEngagement = sequelize.define('BlogEngagement', {
     id: {
       type: DataTypes.UUID,
@@ -37,3 +38,4 @@ const BlogEngagement = sequelize.define('BlogEngagement', {
       allowNull: false
     }
   });
+}

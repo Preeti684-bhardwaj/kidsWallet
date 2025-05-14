@@ -1,3 +1,4 @@
+module.exports = (sequelize, DataTypes) => {
 const Blog = sequelize.define('Blog', {
     id: {
       type: DataTypes.UUID,
@@ -12,14 +13,6 @@ const Blog = sequelize.define('Blog', {
       type: DataTypes.TEXT,
       allowNull: false
     },
-    authorId: {
-      type: DataTypes.UUID,
-      allowNull: false,
-      references: {
-        model: 'Children',
-        key: 'id'
-      }
-    },
     isPublished: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
@@ -27,14 +20,6 @@ const Blog = sequelize.define('Blog', {
     isApproved: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
-    },
-    approvedById: {
-      type: DataTypes.UUID,
-      allowNull: true,
-      references: {
-        model: 'Parents',
-        key: 'id'
-      }
     },
     readCount: {
       type: DataTypes.INTEGER,
@@ -77,3 +62,5 @@ const Blog = sequelize.define('Blog', {
       allowNull: false
     }
   });
+  return Blog;
+}

@@ -1,3 +1,4 @@
+module.exports = (sequelize, DataTypes) => {
 const Achievement = sequelize.define('Achievement', {
     id: {
       type: DataTypes.UUID,
@@ -37,3 +38,4 @@ const Achievement = sequelize.define('Achievement', {
       allowNull: false
     }
   });
+}

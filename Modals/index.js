@@ -8,12 +8,12 @@ const models = {
     Streak: require('./streakModal')(db.sequelize, db.Sequelize.DataTypes),
     Task: require('./TaskModal')(db.sequelize, db.Sequelize.DataTypes),
     Notification: require('./notificationModal')(db.sequelize, db.Sequelize.DataTypes),
-    // Blog: require('./blogModal')(db.sequelize, db.Sequelize.DataTypes),
+    Blog: require('./blogModal')(db.sequelize, db.Sequelize.DataTypes),
     // Quiz: require('./quizModal')(db.sequelize, db.Sequelize.DataTypes),
     // QuizQuestion: require('./quizQuestionModal')(db.sequelize, db.Sequelize.DataTypes),
     // QuizAttempt: require('./quizAttemptModal')(db.sequelize, db.Sequelize.DataTypes),
-    // BlogEngagement: require('./blogEngagementModal')(db.sequelize, db.Sequelize.DataTypes),
-    // Achievement: require('./achievementModal')(db.sequelize, db.Sequelize.DataTypes),
+    BlogEngagement: require('./blogEngagement')(db.sequelize, db.Sequelize.DataTypes),
+    Achievement: require('./achievementModal')(db.sequelize, db.Sequelize.DataTypes),
     // Follower: require('./followerModal')(db.sequelize, db.Sequelize.DataTypes),
     Transaction: require('./transactionModal')(db.sequelize, db.Sequelize.DataTypes),
 }
@@ -43,10 +43,10 @@ models.Child.hasOne(models.Streak, { foreignKey: 'childId' ,
     hooks: true});
 models.Streak.belongsTo(models.Child, { foreignKey: 'childId' });
 
-// Child.hasMany(Blog, { foreignKey: 'authorId', as: 'authoredBlogs' });
-// Blog.belongsTo(Child, { foreignKey: 'authorId', as: 'author' });
-// Parent.hasMany(Blog, { foreignKey: 'approvedById' });
-// Blog.belongsTo(Parent, { foreignKey: 'approvedById', as: 'approver' });
+models.Child.hasMany(models.Blog, { foreignKey: 'authorId', as: 'authoredBlogs' });
+models.Blog.belongsTo(models.Child, { foreignKey: 'authorId', as: 'author' });
+models.Parent.hasMany(models.Blog, { foreignKey: 'approvedById' });
+models.Blog.belongsTo(models.Parent, { foreignKey: 'approvedById', as: 'approver' });
 
 // Blog.hasOne(Quiz, { foreignKey: 'blogId' });
 // Quiz.belongsTo(Blog, { foreignKey: 'blogId' });

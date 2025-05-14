@@ -38,6 +38,10 @@ const Child = sequelize.define('Child', {
       type: DataTypes.BOOLEAN,
       defaultValue: false
     },
+    isPublicAccount: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
     deviceSharingMode: {
       type: DataTypes.BOOLEAN,
       defaultValue: true
