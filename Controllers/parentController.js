@@ -19,7 +19,7 @@ const {
 const sendEmail = require("../Utils/sendEmail");
 const ErrorHandler = require("../Utils/errorHandle");
 const asyncHandler = require("../Utils/asyncHandler");
-const { authenticateToken } = require("../Middlewares/auth");
+const { authenticateToken ,authenticateChildToken} = require("../Middlewares/auth");
 
 // const {
 //   KALEYRA_BASE_URL,
@@ -54,21 +54,6 @@ class ParentController extends BaseController {
       authenticateToken,
       this.createChild.bind(this)
     );
-    this.router.post(
-      "/create/task",
-      authenticateToken,
-      this.createTask.bind(this)
-    );
-    this.router.put(
-      "/approve_tasks/:taskId",
-      authenticateToken,
-      this.approveTask.bind(this)
-    );
-    this.router.put(
-      "/reject_tasks/:taskId",
-      authenticateToken,
-      this.rejectTask.bind(this)
-    );
     this.router.get(
       "/get_notification",
       authenticateToken,
@@ -83,6 +68,11 @@ class ParentController extends BaseController {
       authenticateToken,
       this.getAllChildren.bind(this)
     );    
+    this.router.delete(
+      "/delete/child_account",
+      authenticateToken,
+      this.deleteChldAccount.bind(this)
+    );  
   }
 
   // Override BaseController's listArgVerify to add user-specific query logic
@@ -234,7 +224,7 @@ class ParentController extends BaseController {
       delete parentData.country;
       delete parentData.currency;
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
         message: "Parent created successfully",
         user: parentData,
@@ -282,6 +272,7 @@ class ParentController extends BaseController {
       }
 
       let obj = {
+        type:"parent",
         id: parent.id,
         email: parent.email,
         name: parent.name,
@@ -430,6 +421,7 @@ class ParentController extends BaseController {
       await parent.save();
 
       const obj = {
+        type:"parent",
         id: parent.id,
         email: parent.email,
         name: parent.name,
@@ -731,363 +723,6 @@ class ParentController extends BaseController {
       return next(new ErrorHandler(error.message, 500));
     }
   });
-  
-
-  // --------create task--------------------------------------------------
-  createTask = asyncHandler(async (req, res, next) => {
-    try {
-      const parentId = req.parent.id;
-      const {
-        title,
-        description,
-        coinReward,
-        difficultyLevel,
-        childId,
-        dueDate,
-        isRecurring,
-        recurringFrequency,
-        duration
-      } = req.body;
-  
-      // Verify parent exists
-      const parent = await models.Parent.findByPk(parentId);
-      if (!parent) {
-        return next(new ErrorHandler("Parent not found", 404));
-      }
-  
-      // Verify child belongs to parent
-      const child = await models.Child.findOne({
-        where: { id: childId, parentId },
-      });
-      if (!child) {
-        return next(
-          new ErrorHandler(
-            "Child not found or not associated with this parent",
-            404
-          )
-        );
-      }
-  
-      // Validate title
-      const trimmedTitle = title?.trim();
-      if (
-        !trimmedTitle ||
-        /^\d+$/.test(trimmedTitle) || // numeric-only
-        /^[^a-zA-Z0-9]+$/.test(trimmedTitle) // special characters only
-      ) {
-        return next(
-          new ErrorHandler(
-            "Invalid title. Must contain letters and not be empty, numeric-only, or special characters only.",
-            400
-          )
-        );
-      }
-  
-      // Validate coinReward
-      if (typeof coinReward !== "number" || coinReward <= 0) {
-        return next(
-          new ErrorHandler("Coin reward must be a positive number.", 400)
-        );
-      }
-  
-      // Validate dueDate is not in the past
-      if (dueDate && new Date(dueDate) < new Date()) {
-        return next(
-          new ErrorHandler("Due date cannot be in the past.", 400)
-        );
-      }
-  
-      if (duration !== undefined && (typeof duration !== "number" || duration <= 0)) {
-        return next(
-          new ErrorHandler("Duration must be a positive number in minutes.", 400)
-        );
-      }
-      // Prevent duplicate task for same child, title, and dueDate
-      const existingTask = await models.Task.findOne({
-        where: {
-          childId,
-          title: trimmedTitle,
-          dueDate: dueDate || null,
-        },
-      });
-  
-      if (existingTask) {
-        return next(
-          new ErrorHandler("Duplicate task for same child and time already exists.", 400)
-        );
-      }
-  
-      // Create task
-      const newTask = await models.Task.create({
-        title: trimmedTitle,
-        description,
-        coinReward,
-        difficultyLevel,
-        childId,
-        parentId,
-        dueDate: dueDate || null,
-        isRecurring: isRecurring || false,
-        recurringFrequency: isRecurring ? recurringFrequency : null,
-        duration: duration || null,
-      });
-  
-      // Create notification for child
-      await models.Notification.create({
-        type: "task_reminder",
-        message: `New task assigned: ${trimmedTitle}`,
-        recipientType: "child",
-        recipientId: childId,
-        relatedItemType: "task",
-        relatedItemId: newTask.id,
-      });
-  
-      return res.status(201).json({
-        message: "Task created successfully",
-        data: newTask,
-      });
-    } catch (error) {
-      console.error("Error creating task:", error);
-      return res
-        .status(500)
-        .json({ message: "Failed to create task", error: error.message });
-    }
-  });
-  
-
-  // ------------approve task---------------------------------
-  approveTask = asyncHandler(async (req, res, next) => {
-    try {
-      const parentId = req.parent.id;
-      const { taskId } = req.params;
-
-      // Find task
-      const task = await models.Task.findOne({
-        where: { id: taskId, parentId, status: "completed" },
-        include: [{ model: Child, attributes: ["id", "name", "coinBalance"] }],
-      });
-
-      if (!task) {
-        return next(
-          new ErrorHandler(
-            "Task not found, not assigned by this parent, or not completed",
-            404
-          )
-        );
-      }
-
-      // Start transaction
-      const t = await sequelize.transaction();
-
-      try {
-        // Update task status
-        await task.update({ status: "approved" }, { transaction: t });
-
-        const child = task.Child;
-
-        // Award coins
-        await child.update(
-          {
-            coinBalance: child.coinBalance + task.coinReward,
-          },
-          { transaction: t }
-        );
-
-        // Record transaction
-        await models.Transaction.create(
-          {
-            amount: task.coinReward,
-            type: "task_reward",
-            description: `Reward for completing task: ${task.title}`,
-            childId: child.id,
-            taskId: task.id,
-          },
-          { transaction: t }
-        );
-
-        // Update streak
-        const streak = await models.Streak.findOne({
-          where: { childId: child.id },
-        });
-        if (streak) {
-          const lastDate = streak.lastCompletedDate
-            ? new Date(streak.lastCompletedDate)
-            : null;
-          const today = new Date();
-
-          // If last completion was yesterday or this is first task, increment streak
-          if (
-            !lastDate ||
-            today.getDate() - lastDate.getDate() === 1 ||
-            (today.getDate() === 1 &&
-              lastDate.getDate() ===
-                new Date(
-                  lastDate.getFullYear(),
-                  lastDate.getMonth() + 1,
-                  0
-                ).getDate())
-          ) {
-            await streak.update(
-              {
-                currentStreak: streak.currentStreak + 1,
-                lastCompletedDate: today,
-              },
-              { transaction: t }
-            );
-
-            // Check for 7-day streak
-            if (streak.currentStreak % 7 === 0) {
-              // Award streak bonus
-              const bonusAmount = 50; // Example bonus
-              await child.update(
-                {
-                  coinBalance: child.coinBalance + bonusAmount,
-                },
-                { transaction: t }
-              );
-
-              // Record streak bonus transaction
-              await models.Transaction.create(
-                {
-                  amount: bonusAmount,
-                  type: "streak_bonus",
-                  description: `Bonus for ${streak.currentStreak}-day streak`,
-                  childId: child.id,
-                },
-                { transaction: t }
-              );
-
-              // Notify about streak achievement
-              await models.Notification.create(
-                {
-                  type: "achievement",
-                  message: `Congratulations! You've maintained a ${streak.currentStreak}-day streak!`,
-                  recipientType: "child",
-                  recipientId: child.id,
-                  relatedItemType: "achievement",
-                  relatedItemId: null,
-                },
-                { transaction: t }
-              );
-            }
-          } else {
-            // Reset streak if it's not consecutive
-            await streak.update(
-              {
-                currentStreak: 1,
-                lastCompletedDate: today,
-              },
-              { transaction: t }
-            );
-          }
-        }
-
-        // If task is recurring, create next instance
-        if (task.isRecurring) {
-          const nextDueDate = calculateNextDueDate(
-            task.dueDate || new Date(),
-            task.recurringFrequency
-          );
-          await models.Task.create(
-            {
-              title: task.title,
-              description: task.description,
-              coinReward: task.coinReward,
-              difficultyLevel: task.difficultyLevel,
-              childId: task.childId,
-              parentId: task.parentId,
-              dueDate: nextDueDate,
-              isRecurring: true,
-              recurringFrequency: task.recurringFrequency,
-            },
-            { transaction: t }
-          );
-        }
-
-        // Notify child
-        await models.Notification.create(
-          {
-            type: "task_approval",
-            message: `Your task '${task.title}' was approved! You earned ${task.coinReward} Super Coins.`,
-            recipientType: "child",
-            recipientId: child.id,
-            relatedItemType: "task",
-            relatedItemId: task.id,
-          },
-          { transaction: t }
-        );
-
-        // Commit transaction
-        await t.commit();
-
-        return res.status(200).json({
-          message: "Task approved and coins awarded",
-          data: {
-            task,
-            coinsAwarded: task.coinReward,
-            newBalance: child.coinBalance + task.coinReward,
-          },
-        });
-      } catch (error) {
-        // Rollback transaction
-        await t.rollback();
-        throw error;
-      }
-    } catch (error) {
-      console.error("Error approving task:", error);
-      return res
-        .status(500)
-        .json({ message: "Failed to approve task", error: error.message });
-    }
-  });
-
-  // ------------reject task---------------------------------
-  rejectTask = asyncHandler(async (req, res, next) => {
-    try {
-      const parentId = req.parent.id;
-      const { taskId } = req.params;
-      const { reason } = req.body;
-
-      // Find task
-      const task = await models.Task.findOne({
-        where: { id: taskId, parentId, status: "completed" },
-        include: [{ model: Child, attributes: ["id", "name"] }],
-      });
-
-      if (!task) {
-        return next(
-          new ErrorHandler(
-            "Task not found, not assigned by this parent, or not completed",
-            404
-          )
-        );
-      }
-
-      // Update task status
-      await task.update({ status: "rejected" });
-
-      // Notify child
-      await models.Notification.create({
-        type: "task_approval",
-        message: `Your task '${task.title}' was not approved. ${
-          reason ? "Reason: " + reason : ""
-        }`,
-        recipientType: "child",
-        recipientId: task.childId,
-        relatedItemType: "task",
-        relatedItemId: task.id,
-      });
-
-      return res.status(200).json({
-        message: "Task rejected",
-        data: task,
-      });
-    } catch (error) {
-      console.error("Error rejecting task:", error);
-      return next(
-        new ErrorHandler(error.message || "Failed to reject task", 500)
-      );
-    }
-  });
 
   getParentNotifications = asyncHandler(async (req, res, next) => {
     try {
@@ -1141,14 +776,37 @@ class ParentController extends BaseController {
 
       await user.destroy();
 
-      res.status(200).json({
+     return res.status(200).json({
         message: "User deleted successfully",
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
   });
+  deleteChldAccount = asyncHandler(async (req, res, next) => {
+    try {
+      const childId = req.query.childId;
+      const parentId = req.parent.id;
 
+      // Find the child account
+      const child = await models.Child.findOne({
+        where: { id: childId, parentId },
+      });
+
+      if (!child) {
+        return next(new ErrorHandler("Child not found", 404));
+      }
+
+      // Delete the child account
+      await child.destroy();
+
+      return res.status(200).json({
+        message: "Child account deleted successfully",
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  });
   //---------- Delete parent profile----------------------
   //   deleteProfile = asyncHandler(async (req, res) => {
   //     const transaction = await models.sequelize.transaction();

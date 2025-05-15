@@ -2,6 +2,8 @@ const models = require("../Modals/index");
 require('dotenv').config();
 const jwt = require("jsonwebtoken");
 const { detectOS } = require("../Validators/parentValidation");
+const ErrorHandler = require("../Utils/errorHandle");
+const asyncHandler = require("../Utils/asyncHandler");
 
 exports.authenticateToken = async (req, res, next) => {
   try {
@@ -56,7 +58,7 @@ exports.verifyUserAgent = async (req, res, next) => {
   }
 };
 
-exports.authenticateChildToken = async (req, res, next) => {
+exports.authenticateChildToken = asyncHandler(async (req, res, next) => {
   try {
     // Get the token from Authorization header
     const bearerHeader = req.headers["authorization"];
@@ -91,4 +93,32 @@ console.log("hii i m in auth");
   } catch (error) {
     return res.status(403).json({ error: "Invalid token" });
   }
-};
+});
+
+exports.authenticateUnifiedToken = asyncHandler(async (req, res, next) => {
+  try {
+    const token = req.headers.authorization && req.headers.authorization.split(' ')[1];
+    
+    if (!token) {
+      return next(new ErrorHandler("No authorization token provided", 401));
+    }
+
+    // Verify and decode token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Check user type and set appropriate properties
+    if (decoded.obj && decoded.obj.type === 'child') {
+      req.child = decoded;
+      req.user = decoded; // Also set as user for unified access
+    } else if (decoded.obj && decoded.obj.type === 'parent') {
+      req.parent = decoded;
+      req.user = decoded; // Also set as user for unified access
+    } else {
+      return next(new ErrorHandler("Invalid token format", 401));
+    }
+
+    next();
+  } catch (error) {
+    return next(new ErrorHandler("Invalid token", 401));
+  }
+});

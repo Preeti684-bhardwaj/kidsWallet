@@ -33,11 +33,15 @@ app.use(express.urlencoded({ extended: true }));
 // Routes Imports
 const parentRouter = require("./parentRoutes");
 const childRouter = require("./childRoutes");
+const taskRouter = require("./taskRoutes");
+const blogRouter = require("./blogRoutes");
 
 
 // Routes declaration
 app.use("/parent", parentRouter);
 app.use("/child", childRouter);
+app.use("/blog", blogRouter);
+app.use("/task", taskRouter);
 
 // Middleware for error
 app.use(errorMiddleware);

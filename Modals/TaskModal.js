@@ -25,14 +25,27 @@ const Task = sequelize.define('Task', {
       type: DataTypes.ENUM('assigned', 'completed', 'approved', 'rejected'),
       defaultValue: 'assigned'
     },
+    statusReason: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
     dueDate: {
       type: DataTypes.DATE,                               
       allowNull: true
     },
-    duration: {
-      type: DataTypes.INTEGER, // Duration in minutes
+    dueTime: {
+      type: DataTypes.STRING, // Store as "HH:MM" format
       allowNull: true,
-      comment: 'Task duration in minutes (5, 15, 30, 60, 120, etc.)'
+      validate: {
+        is: /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/
+      }
+    },
+    duration: {
+      type: DataTypes.INTEGER, // Duration in minutes (5, 15, 30, 60, 120)
+      allowNull: true,
+      validate: {
+        isIn: [[5, 15, 30, 60, 120]]
+      }
     },
     isRecurring: {
       type: DataTypes.BOOLEAN,
@@ -41,6 +54,14 @@ const Task = sequelize.define('Task', {
     recurringFrequency: {
       type: DataTypes.ENUM('daily', 'weekly', 'monthly'),
       allowNull: true
+    },
+    parentTaskId: { // To link recurring instances to the original task
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: 'Tasks',
+        key: 'id'
+      }
     },
     completedAt: {
       type: DataTypes.DATE,

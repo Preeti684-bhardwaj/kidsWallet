@@ -42,10 +42,11 @@ const generateOTP = () => {
     };
   }
 };
-
-function calculateNextDueDate(currentDate, frequency) {
+function calculateNextDueDate(currentDate, frequency, dueTime) {
   const nextDate = new Date(currentDate);
-  
+  const [hours, minutes] = dueTime ? dueTime.split(':') : [0, 0];
+
+  // Adjust the date based on frequency
   switch (frequency) {
     case 'daily':
       nextDate.setDate(nextDate.getDate() + 1);
@@ -54,14 +55,53 @@ function calculateNextDueDate(currentDate, frequency) {
       nextDate.setDate(nextDate.getDate() + 7);
       break;
     case 'monthly':
+      const currentDay = nextDate.getDate();
       nextDate.setMonth(nextDate.getMonth() + 1);
+      // Handle month-end edge cases (e.g., Jan 31 -> Feb 28/29)
+      if (nextDate.getDate() !== currentDay) {
+        nextDate.setDate(0); // Set to last day of the previous month
+      }
       break;
+    case 'once':
+      return null; // No next date for one-time tasks
     default:
-      nextDate.setDate(nextDate.getDate() + 1);
+      throw new Error(`Unsupported frequency: ${frequency}`);
   }
-  
+
+  // Preserve the time
+  nextDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
   return nextDate;
 }
 
+module.exports = { calculateNextDueDate };
+// Additional helper function for managing recurring tasks
+async function createNextRecurringTask(taskId) {
+  const task = await models.Task.findByPk(taskId);
+  
+  if (!task || !task.isRecurring || task.recurringFrequency === 'once') {
+    return null;
+  }
+  
+  const nextDueDate = calculateNextDueDate(task.dueDate, task.recurringFrequency);
+  
+  // Check if we should create the next instance
+  const metadata = task.recurringMetadata || {};
+  if (metadata.endDate && nextDueDate > new Date(metadata.endDate)) {
+    return null; // Don't create task past end date
+  }
+  
+  // Create next task instance
+  const nextTask = await models.Task.create({
+    ...task.dataValues,
+    id: undefined, // Let DB generate new ID
+    dueDate: nextDueDate,
+    status: 'assigned',
+    createdAt: undefined,
+    updatedAt: undefined
+  });
+  
+  return nextTask;
+}
 
-module.exports = { generateOTP, generateToken,calculateNextDueDate };
+
+module.exports = { generateOTP, generateToken,calculateNextDueDate,createNextRecurringTask };

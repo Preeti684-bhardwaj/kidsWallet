@@ -5,7 +5,9 @@ const models = require('../Modals/index');
 const {
   isValidLength,
 } = require("../Validators/parentValidation");
-const { authenticateToken } = require("../Middlewares/auth");
+const { authenticateToken,authenticateChildToken,authenticateUnifiedToken } = require("../Middlewares/auth");
+const ErrorHandler = require("../Utils/errorHandle");
+const asyncHandler = require("../Utils/asyncHandler");
 
 
 class BaseController {
@@ -21,7 +23,7 @@ class BaseController {
     this.router.get('/detail',authenticateToken, this.read.bind(this));
     // this.router.get('/:id', this.read.bind(this));
     this.router.post('/', this.create.bind(this));
-    this.router.put('/detail',authenticateToken, this.update.bind(this));
+    this.router.put('/detail',authenticateUnifiedToken, this.update.bind(this));
     this.router.put('/:id', this.update.bind(this));
     this.router.delete('/detail',authenticateToken, this.delete.bind(this));
     this.router.delete('/:id', this.delete.bind(this));
@@ -105,7 +107,7 @@ async listWithReferences(req, res) {
             currentPage: page
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+       return res.status(500).json({ error: error.message });
     }
 }
 
@@ -129,7 +131,7 @@ async listWithReferences(req, res) {
         currentPage: page
       });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
     }
   }
 
@@ -142,12 +144,12 @@ async listWithReferences(req, res) {
       console.log(item);
       
       if (!item) {
-        res.status(404).json({ error: `Resource with id ${id} not found` });
+       return res.status(404).json({ error: `Resource with id ${id} not found` });
       } else {
-        res.status(200).json({success:true,data:item});
+       return res.status(200).json({success:true,data:item});
       }
     } catch (error) {
-      res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
     }
   }
 
@@ -213,51 +215,81 @@ async listWithReferences(req, res) {
       await this.afterCreate(req,res,newItem,transaction);
       // If everything is fine, commit the transaction
       await transaction.commit();
-      res.status(201).json(newItem);
+     return res.status(201).json(newItem);
     } catch (error) {
       // If there is an error, rollback the transaction
       await transaction.rollback();
-      res.status(400).json({ error: error.message });
+     return res.status(400).json({ error: error.message });
     }
   }
 
   async update(req, res) {
     try {
-      const id = req.parent?.id || req.params?.id;
+      const id = req.user?.obj?.id;
+      if (!id) {
+        return res.status(400).json({ error: 'User ID not found in token' });
+      }
   
-      const updateData = { ...req.body };
+      const isChild = req.user?.obj?.type === 'child';
+      let updateData;
   
-      // Only sanitize and validate `name` if it's provided
-      if (typeof updateData.name === "string") {
-        const sanitizedName = updateData.name.trim().replace(/\s+/g, " ");
+      if (isChild) {
+        // Restrict child users to updating only name, age, and isPublicAccount
+        const allowedFields = ['name', 'age', 'isPublicAccount'];
+        updateData = Object.keys(req.body)
+          .filter(key => allowedFields.includes(key))
+          .reduce((obj, key) => ({ ...obj, [key]: req.body[key] }), {});
+      } else {
+        // Allow parent users to update any fields (or define different restrictions)
+        updateData = { ...req.body };
+      }
   
-        // Reject empty/whitespace-only name
+      // Validate and sanitize fields
+      if (typeof updateData.name === 'string') {
+        const sanitizedName = updateData.name.trim().replace(/\s+/g, ' ');
         if (!sanitizedName) {
-          return res.status(400).json({ error: "Name cannot be empty or whitespace" });
+          return res.status(400).json({ error: 'Name cannot be empty or whitespace' });
         }
-  
         const nameError = isValidLength(sanitizedName);
         if (nameError) {
           return res.status(400).json({ error: nameError });
         }
-  
         updateData.name = sanitizedName;
       }
   
+      if (updateData.age !== undefined) {
+        const age = parseInt(updateData.age, 10);
+        if (isNaN(age) || age < 5 || age > 16) {
+          return res.status(400).json({ error: 'Age must be a number between 5 and 16' });
+        }
+        updateData.age = age;
+      }
+  
+      if (updateData.isPublicAccount !== undefined) {
+        if (typeof updateData.isPublicAccount !== 'boolean') {
+          return res.status(400).json({ error: 'isPublicAccount must be a boolean' });
+        }
+      }
+  
+      // If no valid fields to update, return an error
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ error: 'No valid fields provided for update' });
+      }
+  
       const [updated] = await this.model.update(updateData, {
-        where: { id: id }
+        where: { id }
       });
   
       if (updated) {
         const updatedItem = await this.model.findByPk(id, {
-          attributes: { exclude: ["password", "otp", "otpExpire"] },
+          attributes: { exclude: ['password', 'otp', 'otpExpire'] },
         });
-        res.status(200).json({ status: true, data: updatedItem });
+       return res.status(200).json({ status: true, data: updatedItem });
       } else {
-        res.status(404).json({ error: `Resource with id ${id} not found` });
+        return res.status(404).json({ error: `Resource with id ${id} not found` });
       }
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      return res.status(500).json({ error: error.message });
     }
   }
   
@@ -269,14 +301,15 @@ async delete(req, res) {
 		});
 
 		if (deleted) {
-			res.status(204).send({success:true,message:"delete successfully"});
+		return res.status(204).send({success:true,message:"delete successfully"});
 		} else {
-			res.status(404).json({ error: 'Item not found' });
+		return res.status(404).json({ error: 'Item not found' });
 		}
 	} catch (error) {
-		res.status(500).json({ error: error.message });
+		return res.status(500).json({ error: error.message });
 	}
 }
+
 
 // Added 'targetUrl' as a parameter to the function
 // async function proxyRequest(req, res, targetUrl) {

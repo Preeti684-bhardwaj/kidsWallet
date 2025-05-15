@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-   "start": "npx nodemon server.js"
+    "start": "npx nodemon server.js"
   },
   "keywords": [],
   "author": "",
@@ -16,6 +16,7 @@
     "express": "^5.1.0",
     "express-cluster": "^0.0.5",
     "jsonwebtoken": "^9.0.2",
+    "node-cron": "^4.0.5",
     "nodemailer": "^6.10.1",
     "nodemon": "^3.1.9",
     "pg": "^8.14.1",

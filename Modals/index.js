@@ -4,7 +4,6 @@ const db = require('../Configs/db/DbConfig');
 const models = {
     Parent: require('./parentModal')(db.sequelize, db.Sequelize.DataTypes),
     Child: require('./childModal')(db.sequelize, db.Sequelize.DataTypes),
-    Chore: require('./TaskModal')(db.sequelize, db.Sequelize.DataTypes),
     Streak: require('./streakModal')(db.sequelize, db.Sequelize.DataTypes),
     Task: require('./TaskModal')(db.sequelize, db.Sequelize.DataTypes),
     Notification: require('./notificationModal')(db.sequelize, db.Sequelize.DataTypes),
@@ -43,9 +42,11 @@ models.Child.hasOne(models.Streak, { foreignKey: 'childId' ,
     hooks: true});
 models.Streak.belongsTo(models.Child, { foreignKey: 'childId' });
 
-models.Child.hasMany(models.Blog, { foreignKey: 'authorId', as: 'authoredBlogs' });
+models.Child.hasMany(models.Blog, { foreignKey: 'authorId', as: 'authoredBlogs',  onDelete: 'CASCADE',
+    hooks: true});
 models.Blog.belongsTo(models.Child, { foreignKey: 'authorId', as: 'author' });
-models.Parent.hasMany(models.Blog, { foreignKey: 'approvedById' });
+models.Parent.hasMany(models.Blog, { foreignKey: 'approvedById' , onDelete: 'CASCADE',
+    hooks: true});
 models.Blog.belongsTo(models.Parent, { foreignKey: 'approvedById', as: 'approver' });
 
 // Blog.hasOne(Quiz, { foreignKey: 'blogId' });

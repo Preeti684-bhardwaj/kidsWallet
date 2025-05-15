@@ -3,31 +3,10 @@ const BaseController = require("./index");
 const models = require("../Modals/index");
 const db = require("../Configs/db/DbConfig");
 const sequelize = db.sequelize;
-const { generateToken, generateOTP } = require("../Utils/parentHelper");
-const {
-  isValidEmail,
-  isValidPassword,
-  isValidLength,
-} = require("../Validators/parentValidation");
-// const sendEmail = require("../Utils/sendEmail");
+const { generateToken } = require("../Utils/parentHelper");
 const ErrorHandler = require("../Utils/errorHandle");
 const asyncHandler = require("../Utils/asyncHandler");
 const { authenticateChildToken } = require("../Middlewares/auth");
-// const {
-//   KALEYRA_BASE_URL,
-//   KALEYRA_API_KEY,
-//   KALEYRA_FLOW_ID,
-//   KALEYRA_PHONE_FLOW_ID,
-// } = process.env;
-
-// // Kaleyra API configuration
-// const KALEYRA_CONFIG = {
-//   baseURL: KALEYRA_BASE_URL,
-//   apiKey: KALEYRA_API_KEY,
-//   flowId: KALEYRA_FLOW_ID,
-//   phoneFlowId: KALEYRA_PHONE_FLOW_ID,
-// };
-// const QR_EXPIRY_TIME = 5 * 60 * 1000;
 
 class ChildController extends BaseController {
   constructor() {
@@ -40,11 +19,6 @@ class ChildController extends BaseController {
       "/get_all_tasks",
       authenticateChildToken,
       this.getChildTasks.bind(this)
-    );
-    this.router.put(
-      "/complete_task/:taskId",
-      authenticateChildToken,
-      this.markTaskComplete.bind(this)
     );
     this.router.get(
       "/get_notification",
@@ -81,7 +55,11 @@ class ChildController extends BaseController {
       const child = await models.Child.findOne({
         where: { username },
         include: [
-          { model: models.Parent, as:'parent', attributes: ["id", "name", "email"] },
+          {
+            model: models.Parent,
+            as: "parent",
+            attributes: ["id", "name", "email"],
+          },
         ],
       });
 
@@ -94,6 +72,7 @@ class ChildController extends BaseController {
         // Special handling for device sharing mode - simplified login
         // In a real app, you might want additional verification
         let obj = {
+          type: "child",
           id: child.id,
           name: child.name,
           username: child.username,
@@ -103,7 +82,7 @@ class ChildController extends BaseController {
         const token = generateToken(obj);
 
         return res.status(200).json({
-	  success :true ,
+          success: true,
           message: "Login successful",
           token,
           data: {
@@ -124,6 +103,7 @@ class ChildController extends BaseController {
       }
 
       let obj = {
+        type: "child",
         id: child.id,
         name: child.name,
         username: child.username,
@@ -133,6 +113,7 @@ class ChildController extends BaseController {
       const token = generateToken(obj);
 
       return res.status(200).json({
+        success: true,
         message: "Login successful",
         token,
         data: {
@@ -173,62 +154,11 @@ class ChildController extends BaseController {
       if (!tasks || tasks.length === 0) {
         return next(new ErrorHandler("No tasks found for this child", 404));
       }
-      return res.status(200).json({ status: true, data: tasks });
+      return res.status(200).json({ success: true, data: tasks });
     } catch (error) {
       console.error("Error fetching tasks:", error);
       return next(
         new ErrorHandler(error.message || "Failed to fetch tasks", 500)
-      );
-    }
-  });
-
-  markTaskComplete = asyncHandler(async (req, res, next) => {
-    try {
-      const childId = req.child.id;
-      const { taskId } = req.params;
-
-      // Find task
-      const task = await models.Task.findOne({
-        where: { id: taskId, childId },
-      });
-      if (!task) {
-        return next(
-          new ErrorHandler("Task not found or not assigned to this child", 404)
-        );
-      }
-
-      // Check if task is already completed
-      if (task.status !== "assigned") {
-        return next(
-          new ErrorHandler(`Task is already marked as ${task.status}`, 400)
-        );
-      }
-
-      // Update task status
-      await task.update({
-        status: "completed",
-        completedAt: new Date(),
-      });
-
-      // Create notification for parent
-      await models.Notification.create({
-        type: "task_completion",
-        message: `Task '${task.title}' marked as completed by ${childId} and waiting for approval`,
-        recipientType: "parent",
-        recipientId: task.parentId,
-        relatedItemType: "task",
-        relatedItemId: task.id,
-      });
-
-      return res.status(200).json({
-        status: true,
-        message: "Task marked as completed",
-        data: task,
-      });
-    } catch (error) {
-      console.error("Error marking task as complete:", error);
-      return next(
-        new ErrorHandler(error.message || "Failed to update task", 500)
       );
     }
   });
@@ -255,7 +185,7 @@ class ChildController extends BaseController {
         { where: { recipientId: childId } }
       );
 
-      return res.status(200).json({ status: true, data: notifications });
+      return res.status(200).json({ success: true, data: notifications });
     } catch (error) {
       console.error("Error fetching notifications:", error);
       return next(
