@@ -223,36 +223,38 @@ async listWithReferences(req, res) {
     }
   }
 
-  async update(req, res) {
+  async update(req, res,next) {
     try {
-      const id = req.user?.obj?.id;
+      const id = req.parent?.id;
       if (!id) {
-        return res.status(400).json({ error: 'User ID not found in token' });
+        return next(new ErrorHandler("parentId not found in token",400));
       }
   
       const isChild = req.user?.obj?.type === 'child';
       let updateData;
   
       if (isChild) {
-        // Restrict child users to updating only name, age, and isPublicAccount
-        const allowedFields = ['name', 'age', 'isPublicAccount'];
-        updateData = Object.keys(req.body)
-          .filter(key => allowedFields.includes(key))
-          .reduce((obj, key) => ({ ...obj, [key]: req.body[key] }), {});
-      } else {
-        // Allow parent users to update any fields (or define different restrictions)
-        updateData = { ...req.body };
-      }
+        return next(new ErrorHandler("Unauthorized",400));
+        }
+      //   // Restrict child users to updating only name, age, and isPublicAccount
+      //   const allowedFields = ['name', 'age', 'isPublicAccount'];
+      //   updateData = Object.keys(req.body)
+      //     .filter(key => allowedFields.includes(key))
+      //     .reduce((obj, key) => ({ ...obj, [key]: req.body[key] }), {});
+      // } else {
+      //   // Allow parent users to update any fields (or define different restrictions)
+      //   updateData = { ...req.body };
+      // }
   
       // Validate and sanitize fields
       if (typeof updateData.name === 'string') {
         const sanitizedName = updateData.name.trim().replace(/\s+/g, ' ');
         if (!sanitizedName) {
-          return res.status(400).json({ error: 'Name cannot be empty or whitespace' });
+          return next(new ErrorHandler('Name cannot be empty or whitespace',400 ));
         }
         const nameError = isValidLength(sanitizedName);
         if (nameError) {
-          return res.status(400).json({ error: nameError });
+          return next(new ErrorHandler(nameError, 400));
         }
         updateData.name = sanitizedName;
       }
@@ -260,20 +262,20 @@ async listWithReferences(req, res) {
       if (updateData.age !== undefined) {
         const age = parseInt(updateData.age, 10);
         if (isNaN(age) || age < 5 || age > 16) {
-          return res.status(400).json({ error: 'Age must be a number between 5 and 16' });
+           return next(new ErrorHandler('Age must be a number between 5 and 16' ,400));
         }
         updateData.age = age;
       }
   
       if (updateData.isPublicAccount !== undefined) {
         if (typeof updateData.isPublicAccount !== 'boolean') {
-          return res.status(400).json({ error: 'isPublicAccount must be a boolean' });
+          return next(new ErrorHandler('isPublicAccount must be a boolean',400));
         }
       }
   
       // If no valid fields to update, return an error
       if (Object.keys(updateData).length === 0) {
-        return res.status(400).json({ error: 'No valid fields provided for update' });
+        return next(new ErrorHandler('No valid fields provided for update' ,400));
       }
   
       const [updated] = await this.model.update(updateData, {
@@ -286,7 +288,7 @@ async listWithReferences(req, res) {
         });
        return res.status(200).json({ status: true, data: updatedItem });
       } else {
-        return res.status(404).json({ error: `Resource with id ${id} not found` });
+         return next(new ErrorHandler(`Resource with id ${id} not found` ,404));
       }
     } catch (error) {
       return res.status(500).json({ error: error.message });

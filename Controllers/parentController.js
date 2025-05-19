@@ -101,7 +101,7 @@ class ParentController extends BaseController {
     try {
       const { name, countryCode, phone, email, password } = req.body;
 
-      // Validation
+      // Validation - only check required fields (name, email, password)
       if ([name, email, password].some((field) => field?.trim() === "")) {
         return next(
           new ErrorHandler("All required fields must be filled", 400)
@@ -126,21 +126,12 @@ class ParentController extends BaseController {
       if (nameError) {
         return next(new ErrorHandler(nameError, 400));
       }
-      // Validate phone if both country code and phone are provided
+      
+      // Validate phone only if both country code and phone are provided
       let cleanedPhone = null;
       let cleanedCountryCode = null;
 
-      if (phone || countryCode) {
-        // If one is provided, both must be provided
-        if (!phone || !countryCode) {
-          return next(
-            new ErrorHandler(
-              "Both country code and phone number are required",
-              400
-            )
-          );
-        }
-
+      if (phone && countryCode) {
         const phoneValidationResult = phoneValidation.validatePhone(
           countryCode,
           phone
@@ -152,44 +143,35 @@ class ParentController extends BaseController {
 
         cleanedPhone = phoneValidationResult.cleanedPhone;
         cleanedCountryCode = phoneValidationResult.cleanedCode;
+      } else if ((phone && !countryCode) || (!phone && countryCode)) {
+        // If only one of phone or country code is provided, notify user
+        return next(
+          new ErrorHandler(
+            "Both country code and phone number must be provided together if you want to add a phone",
+            400
+          )
+        );
       }
+      
       // Validate email format
       if (!isValidEmail(lowercaseEmail)) {
         return next(new ErrorHandler("Invalid email", 400));
       }
-      // Modify the query to handle optional phone
-      let whereClause = {
-        [Op.or]: [{ email: lowercaseEmail }],
-      };
-
-      // Only add phone to the query if it's provided
-      if (cleanedPhone) {
-        whereClause[Op.or].push({ phone: cleanedPhone });
-      }
-      // Check if user exists
-      const existingParents = await models.Parent.findOne({
-        where: whereClause,
+      
+      // Check only for email uniqueness
+      const existingParent = await models.Parent.findOne({
+        where: { email: lowercaseEmail }
       });
 
-      if (existingParents) {
-        if (existingParents.isEmailVerified) {
-          // If the user is already verified, block the attempt to create a new account
-          if (cleanedPhone && existingParents.phone === cleanedPhone) {
-            return next(new ErrorHandler("Phone number already in use", 409));
-          } else if (existingParents.email.toLowerCase() === lowercaseEmail) {
-            return next(new ErrorHandler("Email already in use", 409));
-          }
+      if (existingParent) {
+        if (existingParent.isEmailVerified) {
+          return next(new ErrorHandler("Email already in use", 409));
         } else {
-          // For unverified users
-          if (cleanedPhone && existingParents.phone === cleanedPhone) {
-            return next(new ErrorHandler("Phone number already in use", 409));
-          } else if (existingParents.email.toLowerCase() === lowercaseEmail) {
-            return next(new ErrorHandler("Email already in use", 409));
-          }
+          return next(new ErrorHandler("Email already in use", 409));
         }
       }
 
-      // Validate the password and create a new user
+      // Validate the password
       const passwordValidationResult = isValidPassword(password);
       if (passwordValidationResult) {
         return next(new ErrorHandler(passwordValidationResult, 400));
@@ -202,10 +184,11 @@ class ParentController extends BaseController {
       const parent = await models.Parent.create(
         {
           email,
-          ...(cleanedPhone && {
+          // Only include phone fields if they're provided
+          ...(cleanedPhone && cleanedCountryCode ? {
             phone: cleanedPhone,
             countryCode: cleanedCountryCode,
-          }), // Only include phone if it's provided
+          } : {}),
           password: hashedPassword,
           name,
         },
@@ -783,6 +766,7 @@ class ParentController extends BaseController {
       return next(new ErrorHandler(error.message, 500));
     }
   });
+  
   deleteChldAccount = asyncHandler(async (req, res, next) => {
     try {
       const childId = req.query.childId;

@@ -49,8 +49,12 @@ class ChildController extends BaseController {
 
   childLogin = asyncHandler(async (req, res, next) => {
     try {
-      const { username, password } = req.body;
-
+      let { username, password } = req.body;
+      // Validate required fields
+      if (!username || username.trim() === "") {
+        return next(new ErrorHandler("Username is required", 400));
+      }
+      username = username.trim();
       // Find child by username
       const child = await models.Child.findOne({
         where: { username },
@@ -90,18 +94,31 @@ class ChildController extends BaseController {
             name: child.name,
             age: child.age,
             coinBalance: child.coinBalance,
+            deviceSharingMode: child.deviceSharingMode,
           },
         });
       }
 
-      // Verify password for non-device sharing mode
-      if (
-        !child.password ||
-        !(await bcrypt.compare(password, child.password))
-      ) {
-        return next(new ErrorHandler("Invalid username or password", 401));
+      // For non-device sharing mode, password is required
+      if (!password || password.trim() === "") {
+        return next(new ErrorHandler("Password is required", 400));
       }
 
+      // Check if child has a password set
+      if (!child.password) {
+        return next(
+          new ErrorHandler(
+            "Child account is not properly configured. Please contact your parent.",
+            400
+          )
+        );
+      }
+
+      // Verify password
+      const isPasswordValid = await bcrypt.compare(password, child.password);
+      if (!isPasswordValid) {
+        return next(new ErrorHandler("Invalid username or password", 401));
+      }
       let obj = {
         type: "child",
         id: child.id,
@@ -121,6 +138,7 @@ class ChildController extends BaseController {
           name: child.name,
           age: child.age,
           coinBalance: child.coinBalance,
+          deviceSharingMode: child.deviceSharingMode,
         },
       });
     } catch (error) {

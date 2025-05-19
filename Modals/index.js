@@ -1,10 +1,12 @@
 const db = require('../Configs/db/DbConfig');
+const taskTemplateModal = require('./taskTemplateModal');
 
 // Import models
 const models = {
     Parent: require('./parentModal')(db.sequelize, db.Sequelize.DataTypes),
     Child: require('./childModal')(db.sequelize, db.Sequelize.DataTypes),
     Streak: require('./streakModal')(db.sequelize, db.Sequelize.DataTypes),
+    TaskTemplate: require('./taskTemplateModal')(db.sequelize, db.Sequelize.DataTypes),
     Task: require('./TaskModal')(db.sequelize, db.Sequelize.DataTypes),
     Notification: require('./notificationModal')(db.sequelize, db.Sequelize.DataTypes),
     Blog: require('./blogModal')(db.sequelize, db.Sequelize.DataTypes),
@@ -31,6 +33,13 @@ models.Parent.hasMany(models.Task, { foreignKey: 'parentId' ,
 models.Child.hasMany(models.Task, { foreignKey: 'childId' });
 models.Task.belongsTo(models.Parent, { foreignKey: 'parentId' });
 models.Task.belongsTo(models.Child, { foreignKey: 'childId' });
+
+// Task Template relationships
+models.TaskTemplate.hasMany(models.Task, { foreignKey: 'taskTemplateId' });
+models.Task.belongsTo(models.TaskTemplate, { foreignKey: 'taskTemplateId' });
+
+// models.Task.hasMany(models.TaskTemplate, { foreignKey: 'parentTaskId' });
+// models.Task.belongsTo(models.TaskTemplate, { foreignKey: 'parentTaskId' });
 
 models.Child.hasMany(models.Transaction, { foreignKey: 'childId' });
 models.Transaction.belongsTo(models.Child, { foreignKey: 'childId' });

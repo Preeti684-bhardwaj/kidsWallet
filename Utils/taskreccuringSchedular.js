@@ -16,6 +16,12 @@ const startTaskScheduler = () => {
           isRecurring: true,
           recurringFrequency: ['daily', 'weekly', 'monthly'], 
         },
+        include: [
+          {
+            model: models.TaskTemplate,
+            attributes: ['id', 'title', 'description', 'image']
+          }
+        ]
       });
 
       const now = new Date();
@@ -47,9 +53,9 @@ const startTaskScheduler = () => {
           const existingTask = await models.Task.findOne({
             where: {
               childId: task.childId,
-              title: task.title,
+              taskTemplateId: task.taskTemplateId,
               dueDate: nextDueDateTime,
-            },
+            }
           });
 
           if (existingTask) {
@@ -59,8 +65,7 @@ const startTaskScheduler = () => {
 
           // Create the new task instance
           const newTask = await models.Task.create({
-            title: task.title,
-            description: task.description,
+            taskTemplateId: task.taskTemplateId, // Link to the same TaskTemplate
             coinReward: task.coinReward,
             difficultyLevel: task.difficultyLevel,
             childId: task.childId,
@@ -77,7 +82,7 @@ const startTaskScheduler = () => {
           // Create notification for child
           await models.Notification.create({
             type: 'task_reminder',
-            message: `New recurring task assigned: ${task.title}`,
+            message: `New recurring task assigned: ${task.TaskTemplate.title}`,
             recipientType: 'child',
             recipientId: task.childId,
             relatedItemType: 'task',
