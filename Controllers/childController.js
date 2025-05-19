@@ -152,27 +152,68 @@ class ChildController extends BaseController {
       console.log("Fetching tasks for child:", req.child.id);
       const childId = req.child.id;
       const { status } = req.query;
-
-      // Build query based on status filter
+  
+      // Build query based on childId and optional status filter
       const query = { childId };
       if (status) {
-        query.status = status;
+        query.status = status.split(',').filter(s => ['assigned', 'completed', 'approved', 'rejected'].includes(s));
       }
-
-      // Get tasks
+  
+      // Get tasks with associated TaskTemplate data
       const tasks = await models.Task.findAll({
         where: query,
+        include: [
+          {
+            model: models.TaskTemplate,
+            attributes: ['title', 'description', 'image'],
+            required: true // Ensure tasks without a template are excluded
+          }
+        ],
         order: [
           ["dueDate", "ASC"],
-          ["createdAt", "DESC"],
+          ["createdAt", "DESC"]
         ],
+        attributes: [
+          'id',
+          'coinReward',
+          'difficultyLevel',
+          'status',
+          'dueDate',
+          'dueTime',
+          'duration',
+          'isRecurring',
+          'recurringFrequency',
+          'completedAt'
+        ]
       });
-
+  
       // Check if tasks exist
       if (!tasks || tasks.length === 0) {
         return next(new ErrorHandler("No tasks found for this child", 404));
       }
-      return res.status(200).json({ success: true, data: tasks });
+  
+      // Format tasks to combine Task and TaskTemplate data
+      const formattedTasks = tasks.map(task => ({
+        id: task.id,
+        title: task.TaskTemplate?.title,
+        description: task.TaskTemplate?.description,
+        image: task.TaskTemplate?.image,
+        coinReward: task.coinReward,
+        difficultyLevel: task.difficultyLevel,
+        status: task.status,
+        dueDate: task.dueDate,
+        dueTime: task.dueTime,
+        duration: task.duration,
+        isRecurring: task.isRecurring,
+        recurringFrequency: task.recurringFrequency,
+        completedAt: task.completedAt
+      }));
+  
+      return res.status(200).json({
+        success: true,
+        message: "Tasks retrieved successfully",
+        data: formattedTasks
+      });
     } catch (error) {
       console.error("Error fetching tasks:", error);
       return next(
