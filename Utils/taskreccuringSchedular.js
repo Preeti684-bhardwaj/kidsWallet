@@ -5,7 +5,7 @@ const { calculateNextDueDate } = require('../Utils/parentHelper');
 // Scheduler to handle recurring tasks
 const startTaskScheduler = () => {
   // Run every minute
-  cron.schedule('* * * * *', async () => {
+  cron.schedule('0 0 * * *', async () => {
     try {
       console.log('Running task scheduler at:', new Date().toISOString());
 
