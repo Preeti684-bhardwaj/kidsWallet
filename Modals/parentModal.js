@@ -10,6 +10,14 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      image :{
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      gender :{
+        type: DataTypes.ENUM('male','female','other'),
+        allowNull: true
+      },
       countryCode: {
         type: DataTypes.STRING,
       },

@@ -26,6 +26,10 @@ const Child = sequelize.define('Child', {
         max: 16
       }
     },
+    gender :{
+      type: DataTypes.ENUM('male','female','other'),
+      allowNull: true
+    },
     profilePicture: {
       type: DataTypes.STRING,
       allowNull: true
@@ -44,7 +48,7 @@ const Child = sequelize.define('Child', {
     },
     deviceSharingMode: {
       type: DataTypes.BOOLEAN,
-      defaultValue: true
+      defaultValue: false
     }
   },
  {

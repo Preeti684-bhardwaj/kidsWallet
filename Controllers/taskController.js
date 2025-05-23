@@ -1,68 +1,12 @@
-const BaseController = require("./index");
 const models = require("../Modals/index");
 const db = require("../Configs/db/DbConfig");
 const sequelize = db.sequelize;
 const ErrorHandler = require("../Utils/errorHandle");
 const asyncHandler = require("../Utils/asyncHandler");
-const {
-  authenticateUnifiedToken,
-  authenticateToken,
-} = require("../Middlewares/auth");
 const { calculateNextDueDate } = require("../Utils/parentHelper");
 
-class taskController extends BaseController {
-  constructor() {
-    // Pass the Task model to the parent BaseController
-    super(models.Task);
-
-    // Add custom routes
-    this.router.post("/create", authenticateToken, this.createTask.bind(this));
-    this.router.get(
-      "/get_all_task_template",
-      authenticateToken,
-      this.getAllTaskTemplate.bind(this)
-    );
-    this.router.put(
-      "/status/:taskId",
-      authenticateUnifiedToken,
-      this.updateTaskStatus.bind(this)
-    );
-    this.router.put(
-      "/update/:taskId",
-      authenticateToken,
-      this.updateTask.bind(this)
-    );
-    this.router.delete(
-      "/delete/:taskId",
-      authenticateToken,
-      this.deleteTask.bind(this)
-    );
-    this.router.get(
-      "/analytics",
-      authenticateToken,
-      this.getTaskAnalytics.bind(this)
-    );
-    this.router.get(
-      "/list",
-      authenticateUnifiedToken,
-      this.listTasks.bind(this)
-    );
-  }
-
-  // Override BaseController's listArgVerify to add filtering logic
-  listArgVerify(req, res, queryOptions) {
-    // Add filtering for specific task statuses if needed
-    if (!queryOptions.where) queryOptions.where = {};
-    // Add any default filtering logic here
-  }
-
-  // Override BaseController's afterCreate for post-creation actions
-  async afterCreate(req, res, newObject, transaction) {
-    // Custom logic after task creation if needed
-  }
-
   // --------create task--------------------------------------------------
-  createTask = asyncHandler(async (req, res, next) => {
+  const createTask = asyncHandler(async (req, res, next) => {
     try {
       const parentId = req.parent.id;
       const {
@@ -322,7 +266,7 @@ class taskController extends BaseController {
   });
 
   //---------------Task Analytics Function-------------------------------
-  getTaskAnalytics = asyncHandler(async (req, res, next) => {
+  const getTaskAnalytics = asyncHandler(async (req, res, next) => {
     try {
       const parentId = req.parent?.id;
       const userType = req.parent ? "parent" : "child";
@@ -435,9 +379,8 @@ class taskController extends BaseController {
   });
 
   //---------------Task Listing with Filtering Function-------------------------
-  listTasks = asyncHandler(async (req, res, next) => {
+  const listTasks = asyncHandler(async (req, res, next) => {
     try {
-   
       // Determine user type from decoded token
       const userType =
         req.user?.obj?.type || req.child?.obj?.type || req.parent?.obj?.type;
@@ -447,7 +390,7 @@ class taskController extends BaseController {
       if (!userType || !userId) {
         return next(new ErrorHandler("Invalid authentication token", 401));
       }
-console.log(userId);
+      console.log(userId);
 
       // Extract query parameters for filtering
       const {
@@ -601,7 +544,7 @@ console.log(userId);
   });
 
   // ------------get all task template------------------------------------
-  getAllTaskTemplate = asyncHandler(async (req, res, next) => {
+  const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
     try {
       const taskTemplates = await models.TaskTemplate.findAll({
         // where: { isTemplate: true },
@@ -633,7 +576,7 @@ console.log(userId);
   });
 
   // ------------unified task status update---------------------------------
-  updateTaskStatus = asyncHandler(async (req, res, next) => {
+  const updateTaskStatus = asyncHandler(async (req, res, next) => {
     try {
       const { taskId } = req.params;
       const { status, reason } = req.body; // status can be 'completed', 'approved', 'rejected'
@@ -947,7 +890,7 @@ console.log(userId);
   });
 
   //------------------------Update Task-------------------------------------------
-  updateTask = asyncHandler(async (req, res, next) => {
+  const updateTask = asyncHandler(async (req, res, next) => {
     try {
       const { taskId } = req.params;
       const parentId = req.parent.id;
@@ -1210,7 +1153,7 @@ console.log(userId);
   });
 
   //---------------------Delete Task---------------------------------------------
-  deleteTask = asyncHandler(async (req, res, next) => {
+  const deleteTask = asyncHandler(async (req, res, next) => {
     try {
       const { taskId } = req.params;
       const parentId = req.parent.id;
@@ -1288,5 +1231,13 @@ console.log(userId);
       );
     }
   });
-}
-module.exports = new taskController();
+
+module.exports = {
+    createTask,
+    getTaskAnalytics,
+    listTasks,
+    getAllTaskTemplate,
+    updateTaskStatus,
+    updateTask,
+    deleteTask,
+};

@@ -1,53 +1,11 @@
 const bcrypt = require("bcrypt");
-const BaseController = require("./index");
 const models = require("../Modals/index");
-const db = require("../Configs/db/DbConfig");
-const sequelize = db.sequelize;
 const { generateToken } = require("../Utils/parentHelper");
 const ErrorHandler = require("../Utils/errorHandle");
 const asyncHandler = require("../Utils/asyncHandler");
-const { authenticateChildToken } = require("../Middlewares/auth");
 
-class ChildController extends BaseController {
-  constructor() {
-    // Pass the User model to the parent BaseController
-    super(models.Child);
-
-    // Add custom routes in addition to base routes
-    this.router.post("/auth/login", this.childLogin.bind(this));
-    this.router.get(
-      "/get_all_tasks",
-      authenticateChildToken,
-      this.getChildTasks.bind(this)
-    );
-    this.router.get(
-      "/get_notification",
-      authenticateChildToken,
-      this.getChildNotifications.bind(this)
-    );
-  }
-
-  // Override BaseController's listArgVerify to add user-specific query logic
-  listArgVerify(req, res, queryOptions) {
-    // Remove sensitive fields from the response
-    if (queryOptions.attributes) {
-      queryOptions.attributes = queryOptions.attributes.filter(
-        (attr) => !["password"].includes(attr)
-      );
-    }
-  }
-
-  // Override BaseController's afterCreate for post-creation actions
-  async afterCreate(req, res, newObject, transaction) {
-    // Remove password from response
-    if (newObject.dataValues) {
-      delete newObject.dataValues.password;
-      //   delete newObject.dataValues.otp;
-      //   delete newObject.dataValues.otpExpiry;
-    }
-  }
-
-  childLogin = asyncHandler(async (req, res, next) => {
+  // --------child login----------------------------------------
+ const childLogin = asyncHandler(async (req, res, next) => {
     try {
       let { username, password } = req.body;
       // Validate required fields
@@ -147,7 +105,8 @@ class ChildController extends BaseController {
     }
   });
 
-  getChildTasks = asyncHandler(async (req, res, next) => {
+  // --------get child tasks----------------------------------------
+ const getChildTasks = asyncHandler(async (req, res, next) => {
     try {
       console.log("Fetching tasks for child:", req.child.id);
       const childId = req.child.id;
@@ -222,7 +181,8 @@ class ChildController extends BaseController {
     }
   });
 
-  getChildNotifications = asyncHandler(async (req, res, next) => {
+  // --------get child notifications----------------------------------------
+  const getChildNotifications = asyncHandler(async (req, res, next) => {
     try {
       const childId = req.child.id;
 
@@ -252,6 +212,9 @@ class ChildController extends BaseController {
       );
     }
   });
-}
 
-module.exports = new ChildController();
+module.exports ={
+  childLogin,
+  getChildTasks,
+  getChildNotifications
+};
