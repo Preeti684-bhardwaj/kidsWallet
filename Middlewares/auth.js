@@ -35,6 +35,8 @@ exports.authenticateToken = async (req, res, next) => {
       return res.status(404).json({ error: "Parent not found" });
     }
     req.parent = parent;
+    console.log("Parent authenticated successfully:", parent.id);
+    
     req.token = token;
     next();
   } catch (error) {
@@ -97,7 +99,17 @@ console.log("hii i m in auth");
 
 exports.authenticateUnifiedToken = asyncHandler(async (req, res, next) => {
   try {
-    const token = req.headers.authorization && req.headers.authorization.split(' ')[1];
+    const bearerHeader = req.headers["authorization"];
+    console.log("hii i m in auth");
+    
+        // Check if bearer header exists
+        if (!bearerHeader) {
+          return next(new ErrorHandler("Access Denied.", 401));
+        }
+    
+        // Extract the token
+        // Format in Postman: "Bearer eyJhbGciOiJIUzI1NiIs..."
+        const token = bearerHeader.replace("Bearer ", "").trim();
     
     if (!token) {
       return next(new ErrorHandler("No authorization token provided", 401));

@@ -4,7 +4,7 @@ const express = require("express");
 const models = require("./Modals/index.js");
 const db = models.db;
 const dotenv = require("dotenv").config();
-const { startTaskScheduler } = require("./Utils/taskreccuringSchedular.js");
+const { scheduleTaskStatusAndRecurrence } = require("./Utils/taskreccuringSchedular.js");
 // const setupSocket = require("./src/Utils/socketSetup.js");
 let cluster = require("express-cluster");
 
@@ -20,15 +20,18 @@ cluster(
       }
 
       // Sync database
-      await db.sequelize.sync({ alter: true });
-      console.log("Database synchronized successfully");
+      if (process.env.NODE_ENV !== 'production') {
+        await db.sequelize.sync({ alter: true });
+      } else {
+        console.log('Skipping `sequelize.sync()` in production. Use migrations instead.');
+      }
       app.use("/api", router);
       // Start HTTP server
       const server = app.listen(process.env.PORT || 7991, () => {
         console.log(`Server listening on port ${process.env.PORT}`);
       });
       // Start the scheduler
-      startTaskScheduler();
+      scheduleTaskStatusAndRecurrence();
       // Setup WebSocket
       //   const io = setupSocket(server);
       //   app.set("io", io);

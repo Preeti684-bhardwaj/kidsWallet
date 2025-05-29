@@ -5,22 +5,6 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true
     },
-    coinReward: {
-      type: DataTypes.INTEGER,
-      allowNull: false
-    },
-    difficultyLevel: {
-      type: DataTypes.ENUM('easy', 'medium', 'hard'),
-      allowNull: false
-    },
-    status: {
-      type: DataTypes.ENUM('assigned', 'completed', 'approved', 'rejected'),
-      defaultValue: 'assigned'
-    },
-    statusReason: {
-      type: DataTypes.TEXT,
-      allowNull: true
-    },
     dueDate: {
       type: DataTypes.DATE,                               
       allowNull: true
@@ -33,32 +17,53 @@ module.exports = (sequelize, DataTypes) => {
       }
     },
     duration: {
-      type: DataTypes.INTEGER, // Duration in minutes (5, 15, 30, 60, 120)
-      allowNull: true,
+      type: DataTypes.INTEGER, // Duration in minutes
+      allowNull: false,
       validate: {
-        isIn: [[5, 15, 30, 60, 120]]
-      }
+        min: { args: 1, msg: 'Duration must be at least 1 minute' },
+      },
+    },
+    recurrence: {
+      type: DataTypes.ENUM('ONCE', 'DAILY', 'WEEKLY', 'MONTHLY'),
+      allowNull: false,
+    },
+    status: {
+      type: DataTypes.ENUM('UPCOMING','PENDING', 'COMPLETED', 'APPROVED', 'REJECTED', 'OVERDUE'),
+      defaultValue: 'PENDING',
+    },
+    rewardCoins: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      // validate: {
+      //   min: { args: 0, msg: 'Reward coins cannot be negative' },
+      // },
+    },
+    difficulty: {
+      type: DataTypes.ENUM('EASY', 'MEDIUM', 'HARD'),
+      allowNull: false,
+      defaultValue: 'EASY',
     },
     isRecurring: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
     },
-    recurringFrequency: {
-      type: DataTypes.ENUM('daily', 'weekly', 'monthly'),
-      allowNull: true
-    },
-    parentTaskId: { // To link recurring instances to the original task
-      type: DataTypes.UUID,
-      allowNull: true,
-      references: {
-        model: 'Tasks',
-        key: 'id'
-      }
-    },
     completedAt: {
       type: DataTypes.DATE,
-      allowNull: true 
-    }
+      allowNull: true
+    },
+    approvedAt: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    rejectedAt: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    rejectionReason: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
   },
   {
     timestamps: true,

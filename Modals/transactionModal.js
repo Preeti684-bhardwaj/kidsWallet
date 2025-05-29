@@ -15,6 +15,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.ENUM(
           "task_reward",
           "streak_bonus",
+          "credit",
           "blog_reward",
           "quiz_reward",
           "spending",

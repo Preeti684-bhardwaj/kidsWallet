@@ -30,7 +30,8 @@ models.Parent.hasMany(models.Child, {
 models.Parent.hasMany(models.Task, { foreignKey: 'parentId' ,
     onDelete: 'CASCADE',
     hooks: true});
-models.Child.hasMany(models.Task, { foreignKey: 'childId' });
+models.Child.hasMany(models.Task, { foreignKey: 'childId' , onDelete: 'CASCADE',
+    hooks: true});
 models.Task.belongsTo(models.Parent, { foreignKey: 'parentId' });
 models.Task.belongsTo(models.Child, { foreignKey: 'childId' });
 
