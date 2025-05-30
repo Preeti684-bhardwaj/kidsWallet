@@ -5,9 +5,10 @@ const taskTemplateModal = require('./taskTemplateModal');
 const models = {
     Parent: require('./parentModal')(db.sequelize, db.Sequelize.DataTypes),
     Child: require('./childModal')(db.sequelize, db.Sequelize.DataTypes),
+    Admin: require('./adminModal')(db.sequelize, db.Sequelize.DataTypes),
     Streak: require('./streakModal')(db.sequelize, db.Sequelize.DataTypes),
     TaskTemplate: require('./taskTemplateModal')(db.sequelize, db.Sequelize.DataTypes),
-    Task: require('./TaskModal')(db.sequelize, db.Sequelize.DataTypes),
+    Task: require('./taskModal')(db.sequelize, db.Sequelize.DataTypes),
     Notification: require('./notificationModal')(db.sequelize, db.Sequelize.DataTypes),
     Blog: require('./blogModal')(db.sequelize, db.Sequelize.DataTypes),
     // Quiz: require('./quizModal')(db.sequelize, db.Sequelize.DataTypes),
@@ -19,48 +20,42 @@ const models = {
     Transaction: require('./transactionModal')(db.sequelize, db.Sequelize.DataTypes),
 }
 // Define relationships
-models.Parent.hasMany(models.Child, {
-    foreignKey: 'parentId',
-    as: 'children',
-    onDelete: 'CASCADE',
-    hooks: true
-  });
-  models.Child.belongsTo(models.Parent, { foreignKey: 'parentId' , as: 'parent'});
 
-models.Parent.hasMany(models.Task, { foreignKey: 'parentId' ,
-    onDelete: 'CASCADE',
-    hooks: true});
-models.Child.hasMany(models.Task, { foreignKey: 'childId' , onDelete: 'CASCADE',
-    hooks: true});
+//-----------------parent child relationships-----------------------------
+models.Parent.hasMany(models.Child, {foreignKey: 'parentId',as: 'children',onDelete: 'CASCADE',hooks: true});
+models.Child.belongsTo(models.Parent, { foreignKey: 'parentId' , as: 'parent'});
+//-----------------parent task relationships---------------------
+models.Parent.hasMany(models.Task, { foreignKey: 'parentId' , onDelete: 'CASCADE', hooks: true});
 models.Task.belongsTo(models.Parent, { foreignKey: 'parentId' });
+//------------------admin task relationships--------------------------------
+// models.Admin.hasMany(models.Task, { foreignKey: 'adminId' , onDelete: 'CASCADE', hooks: true});
+// models.Task.belongsTo(models.Admin, { foreignKey: 'adminId' });
+//-------------------child task relationships-----------------------------------
+models.Child.hasMany(models.Task, { foreignKey: 'childId' , onDelete: 'CASCADE', hooks: true});
 models.Task.belongsTo(models.Child, { foreignKey: 'childId' });
-
-models.Parent.hasMany(models.TaskTemplate, { foreignKey: 'userId' ,
-    onDelete: 'CASCADE',
-    hooks: true});
+//------------------parent tasktemplate relation-------------------------------
+models.Parent.hasMany(models.TaskTemplate, { foreignKey: 'userId' , onDelete: 'CASCADE', hooks: true});
 models.TaskTemplate.belongsTo(models.Parent, { foreignKey: 'userId' });
-// Task Template relationships
+//------------------admin tasktemplate relation-------------------------------
+models.Admin.hasMany(models.TaskTemplate, { foreignKey: 'adminId' , onDelete: 'CASCADE', hooks: true});
+models.TaskTemplate.belongsTo(models.Admin, { foreignKey: 'adminId' });
+//------------------Task Template relationships-----------------------------------
 models.TaskTemplate.hasMany(models.Task, { foreignKey: 'taskTemplateId' });
 models.Task.belongsTo(models.TaskTemplate, { foreignKey: 'taskTemplateId' });
-
-// models.Task.hasMany(models.TaskTemplate, { foreignKey: 'parentTaskId' });
-// models.Task.belongsTo(models.TaskTemplate, { foreignKey: 'parentTaskId' });
-
+//------------------child transaction relationships-----------------------
 models.Child.hasMany(models.Transaction, { foreignKey: 'childId' });
 models.Transaction.belongsTo(models.Child, { foreignKey: 'childId' });
+//------------------task transaction relationships----------------------------------------
 models.Task.hasMany(models.Transaction, { foreignKey: 'taskId' });
 models.Transaction.belongsTo(models.Task, { foreignKey: 'taskId' });
-
-models.Child.hasOne(models.Streak, { foreignKey: 'childId' ,
-    onDelete: 'CASCADE',
-    hooks: true});
+//-----------------child streak relationships--------------------------------
+models.Child.hasOne(models.Streak, { foreignKey: 'childId' , onDelete: 'CASCADE', hooks: true});
 models.Streak.belongsTo(models.Child, { foreignKey: 'childId' });
-
-models.Child.hasMany(models.Blog, { foreignKey: 'authorId', as: 'authoredBlogs',  onDelete: 'CASCADE',
-    hooks: true});
+//------------------child blog relationships-------------------------------------
+models.Child.hasMany(models.Blog, { foreignKey: 'authorId', as: 'authoredBlogs',  onDelete: 'CASCADE', hooks: true});
 models.Blog.belongsTo(models.Child, { foreignKey: 'authorId', as: 'author' });
-models.Parent.hasMany(models.Blog, { foreignKey: 'approvedById' , onDelete: 'CASCADE',
-    hooks: true});
+//------------------parent blog relationships-------------------------------------
+models.Parent.hasMany(models.Blog, { foreignKey: 'approvedById' , onDelete: 'CASCADE', hooks: true});
 models.Blog.belongsTo(models.Parent, { foreignKey: 'approvedById', as: 'approver' });
 
 // Blog.hasOne(Quiz, { foreignKey: 'blogId' });

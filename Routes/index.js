@@ -34,12 +34,14 @@ app.use(express.urlencoded({ extended: true }));
 const parentRouter = require("./parentRoutes");
 const childRouter = require("./childRoutes");
 const taskRouter = require("./taskRoutes");
+const adminRouter = require("./adminRoutes");
 // const blogRouter = require("./blogRoutes");
 
 
 // Routes declaration
 app.use("/parent", parentRouter);
 app.use("/child", childRouter);
+app.use("/admin", adminRouter);
 // app.use("/blog", blogRouter);
 app.use("/task", taskRouter);
 

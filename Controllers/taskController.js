@@ -1,5 +1,5 @@
 const models = require("../Modals/index");
-const { Op } = require("sequelize");
+const { Op , literal } = require("sequelize");
 const db = require("../Configs/db/DbConfig");
 const sequelize = db.sequelize;
 const moment = require("moment");
@@ -12,10 +12,10 @@ const { v4: uuidv4, validate: isValidUUID } = require('uuid');
 const ErrorHandler = require("../Utils/errorHandle");
 const asyncHandler = require("../Utils/asyncHandler");
 
-// Create a new task template (Parent only)
-const createTaskTemplate = asyncHandler(async (req, res,next) => {
+//---------------------Create a new task template (Both Parent and Admin)------------------------------------
+const createTaskTemplate = asyncHandler(async (req, res, next) => {
   const { title, description, image } = req.body;
-  const userId= req.parent?.obj?.id;
+  
   try {
     // Validate title
     const trimmedTitle = title?.trim();
@@ -31,6 +31,7 @@ const createTaskTemplate = asyncHandler(async (req, res,next) => {
         )
       );
     }
+    
     // Check if task template with same title already exists
     const existingTemplate = await models.TaskTemplate.findOne({
       where: { title: trimmedTitle },
@@ -40,12 +41,28 @@ const createTaskTemplate = asyncHandler(async (req, res,next) => {
         new ErrorHandler("Task template with this title already exists", 400)
       );
     }
-    const taskTemplate = await models.TaskTemplate.create({
-      title,
+    
+    // Prepare data based on user type
+    let taskTemplateData = {
+      title: trimmedTitle,
       description,
-      image,
-      userId
-    });
+      image
+    };
+    
+    if (req.userType === "parent") {
+      taskTemplateData.userId = req.parent.id;
+      taskTemplateData.adminId = null; // Explicitly set to null
+      console.log("Creating template for parent:", req.parent.id);
+    } else if (req.userType === "admin") {
+      taskTemplateData.adminId = req.admin.id;
+      taskTemplateData.userId = null; // Explicitly set to null
+      console.log("Creating template for admin:", req.admin.id);
+    } else {
+      return next(new ErrorHandler("Invalid user type", 400));
+    }
+    
+    const taskTemplate = await models.TaskTemplate.create(taskTemplateData);
+    
     return res.status(201).json({
       success: true,
       message: "Task template created successfully",
@@ -54,36 +71,79 @@ const createTaskTemplate = asyncHandler(async (req, res,next) => {
         title: taskTemplate.title,
         description: taskTemplate.description,
         image: taskTemplate.image,
+        userId: taskTemplate.userId,
+        adminId: taskTemplate.adminId,
+        createdBy: req.userType
       },
     });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error("Error creating task template:", error);
+    return next(new ErrorHandler(error.message || "Failed to create task template", 500));
   }
 });
 
-// ------------get all task template------------------------------------
+//--------------------Get all task templates---------------------------------------------------------
 const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
   try {
+    let whereCondition = {};
+    
+    if (req.userType === "parent") {
+      // For parents: get templates created by this parent OR by any admin
+      whereCondition = {
+        [Op.or]: [
+          { 
+            userId: req.parent.id,
+            adminId: null // Templates created by this parent
+          },
+          { 
+            adminId: { [Op.ne]: null },
+            userId: null // Templates created by any admin (default templates)
+          }
+        ]
+      };
+    } else if (req.userType === "admin") {
+      // For admins: get only templates created by this specific admin
+      whereCondition = {
+        adminId: req.admin.id,
+        userId: null // Only templates created by this admin
+      };
+    } else {
+      return next(new ErrorHandler("Invalid user type", 400));
+    }
+    
     const taskTemplates = await models.TaskTemplate.findAll({
-      // where: { isTemplate: true },
+      where: whereCondition,
       order: [["createdAt", "DESC"]],
-      attributes: ["id", "title", "description", "image"],
-      // include: [
-      //   {
-      //     model: models.Task,
-      //     attributes: ["id", "coinReward", "difficultyLevel"],
-      //     where: { isRecurring: false },
-      //     required: false,
-      //   },
-      // ],
+      attributes: ["id", "title", "description", "image", "userId", "adminId"],
+      include: [
+        {
+          model: models.Parent,
+          attributes: ["id", "email"], // Include parent info if exists
+          required: false
+        },
+        {
+          model: models.Admin,
+          attributes: ["id", "email"], // Include admin info if exists
+          required: false
+        }
+      ]
     });
+    
     if (!taskTemplates || taskTemplates.length === 0) {
       return next(new ErrorHandler("No task templates found", 404));
     }
+    
+    // Add createdBy field for better understanding
+    const templatesWithCreator = taskTemplates.map(template => {
+      const templateData = template.toJSON();
+      templateData.createdBy = templateData.userId ? "parent" : "admin";
+      return templateData;
+    });
+    
     return res.status(200).json({
       success: true,
       message: "Task templates fetched successfully",
-      data: taskTemplates,
+      data: templatesWithCreator,
     });
   } catch (error) {
     console.error("Error fetching task templates:", error);
@@ -92,7 +152,6 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
     );
   }
 });
-
 //---------------- Create a new task (Parent only)-----------------------------
 const createTask = asyncHandler(async (req, res, next) => {
   const {

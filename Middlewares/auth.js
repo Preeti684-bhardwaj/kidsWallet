@@ -22,27 +22,55 @@ exports.authenticateToken = async (req, res, next) => {
     if (!token) {
       return next(new ErrorHandler("Authentication token required.", 401));
     }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log(decoded);
-    const parentId = decoded.obj.id;
-    // Find user
-    const parent = await models.Parent.findOne({
-      where: { id: parentId },
-      attributes: { exclude: ["password","otp","otpExpire"] },
-    });
+    
+    const userType = decoded.obj.type;
+    const userId = decoded.obj.id;
 
-    if (!parent) {
-      return res.status(404).json({ error: "Parent not found" });
+    if (userType === "parent") {
+      // Find parent
+      const parent = await models.Parent.findOne({
+        where: { id: userId },
+        attributes: { exclude: ["password", "otp", "otpExpire"] },
+      });
+
+      if (!parent) {
+        return res.status(404).json({ error: "Parent not found" });
+      }
+      
+      req.parent = parent;
+      req.userType = "parent";
+      console.log("Parent authenticated successfully:", parent.id);
+      
+    } else if (userType === "admin") {
+      // Find admin
+      const admin = await models.Admin.findOne({
+        where: { id: userId },
+        attributes: { exclude: ["password"] },
+      });
+
+      if (!admin) {
+        return res.status(404).json({ error: "Admin not found" });
+      }
+      
+      req.admin = admin;
+      req.userType = "admin";
+      console.log("Admin authenticated successfully:", admin.id);
+      
+    } else {
+      return res.status(403).json({ error: "Invalid user type in token" });
     }
-    req.parent = parent;
-    console.log("Parent authenticated successfully:", parent.id);
     
     req.token = token;
     next();
   } catch (error) {
+    console.log("Authentication error:", error.message);
     return res.status(403).json({ error: "Invalid token" });
   }
 };
+
 
 exports.verifyUserAgent = async (req, res, next) => {
   try {
