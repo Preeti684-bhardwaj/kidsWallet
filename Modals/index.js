@@ -35,6 +35,10 @@ models.Child.hasMany(models.Task, { foreignKey: 'childId' , onDelete: 'CASCADE',
 models.Task.belongsTo(models.Parent, { foreignKey: 'parentId' });
 models.Task.belongsTo(models.Child, { foreignKey: 'childId' });
 
+models.Parent.hasMany(models.TaskTemplate, { foreignKey: 'userId' ,
+    onDelete: 'CASCADE',
+    hooks: true});
+models.TaskTemplate.belongsTo(models.Parent, { foreignKey: 'userId' });
 // Task Template relationships
 models.TaskTemplate.hasMany(models.Task, { foreignKey: 'taskTemplateId' });
 models.Task.belongsTo(models.TaskTemplate, { foreignKey: 'taskTemplateId' });

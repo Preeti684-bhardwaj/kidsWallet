@@ -26,47 +26,6 @@ const sortRecurrenceDates = (dates) => {
   });
 };
 
-// Check if a task is overdue based on dueTime
-const isTaskOverdue = (task) => {
-  const now = moment();
-  const dueTime = moment(task.dueTime);
-  return task.status === 'PENDING' && now.isAfter(dueTime);
-};
-
-// Update task status to overdue
-const updateTaskStatus = async (Task) => {
-  const tasks = await Task.findAll({
-    where: {
-      status: 'PENDING',
-      dueTime: { [Op.lt]: new Date() },
-    },
-  });
-
-  for (const task of tasks) {
-    await task.update({ status: 'OVERDUE' });
-  }
-};
-
-// Generate next occurrences for recurring tasks based on recurrenceDates
-const generateNextOccurrences = (task) => {
-  const now = moment();
-  const recurrenceDates = task.recurrenceDates || [];
-  const dueTime = moment(task.dueTime);
-  const currentDate = dueTime.format('DD-MM-YYYY');
-  const timeOfDay = dueTime.format('HH:mm:ss');
-
-  // Find dates after the current task's due date
-  const futureDates = recurrenceDates.filter(date => {
-    return moment(date, 'DD-MM-YYYY').isAfter(dueTime);
-  });
-
-  // Map future dates to new dueTime values, preserving the time of day
-  return futureDates.map(date => {
-    const newDueTime = moment(`${date} ${timeOfDay}`, 'DD-MM-YYYY HH:mm:ss').toDate();
-    return { nextDueTime: newDueTime };
-  });
-};
-
 const validateQueryParams = (query) => {
   const errors = [];
 
@@ -108,11 +67,52 @@ const validateQueryParams = (query) => {
   return { errors, page, limit };
 };
 
+// // // Check if a task is overdue based on dueTime
+// const isTaskOverdue = (task) => {
+//   const now = moment();
+//   const dueTime = moment(task.dueTime);
+//   return task.status === 'PENDING' && now.isAfter(dueTime);
+// };
+
+// // Update task status to overdue
+// const updateTaskStatus = async (Task) => {
+//   const tasks = await Task.findAll({
+//     where: {
+//       status: 'PENDING',
+//       dueTime: { [Op.lt]: new Date() },
+//     },
+//   });
+
+//   for (const task of tasks) {
+//     await task.update({ status: 'OVERDUE' });
+//   }
+// };
+
+// // Generate next occurrences for recurring tasks based on recurrenceDates
+// const generateNextOccurrences = (task) => {
+//   const now = moment();
+//   const recurrenceDates = task.recurrenceDates || [];
+//   const dueTime = moment(task.dueTime);
+//   const currentDate = dueTime.format('DD-MM-YYYY');
+//   const timeOfDay = dueTime.format('HH:mm:ss');
+
+//   // Find dates after the current task's due date
+//   const futureDates = recurrenceDates.filter(date => {
+//     return moment(date, 'DD-MM-YYYY').isAfter(dueTime);
+//   });
+
+//   // Map future dates to new dueTime values, preserving the time of day
+//   return futureDates.map(date => {
+//     const newDueTime = moment(`${date} ${timeOfDay}`, 'DD-MM-YYYY HH:mm:ss').toDate();
+//     return { nextDueTime: newDueTime };
+//   });
+// };
+
 module.exports = {
   calculateDefaultReward,
   sortRecurrenceDates,
-  isTaskOverdue,
-  updateTaskStatus,
-  generateNextOccurrences,
+  // isTaskOverdue,
+  // updateTaskStatus,
+  // generateNextOccurrences,
   validateQueryParams
 };
