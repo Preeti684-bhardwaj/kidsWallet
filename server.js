@@ -20,11 +20,8 @@ cluster(
       }
 
       // Sync database
-      if (process.env.NODE_ENV !== 'production') {
-        await db.sequelize.sync({ alter: true });
-      } else {
-        console.log('Skipping `sequelize.sync()` in production. Use migrations instead.');
-      }
+      await db.sequelize.sync({ alter: true });
+     
       app.use("/api", router);
       // Start HTTP server
       const server = app.listen(process.env.PORT || 7991, () => {
