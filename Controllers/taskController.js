@@ -15,7 +15,7 @@ const asyncHandler = require("../Utils/asyncHandler");
 // Create a new task template (Parent only)
 const createTaskTemplate = asyncHandler(async (req, res,next) => {
   const { title, description, image } = req.body;
-
+  const userId= req.parent?.obj?.id;
   try {
     // Validate title
     const trimmedTitle = title?.trim();
@@ -44,6 +44,7 @@ const createTaskTemplate = asyncHandler(async (req, res,next) => {
       title,
       description,
       image,
+      userId
     });
     return res.status(201).json({
       success: true,
