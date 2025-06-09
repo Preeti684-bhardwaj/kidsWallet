@@ -14,10 +14,11 @@ const {
     authenticateUnifiedToken,
     authenticateToken,
   } = require("../Middlewares/auth");
+const upload = require("../Middlewares/multer");
 
 
 // // Delegate routing to the controller
-router.post("/create_task_template", authenticateToken, createTaskTemplate);
+router.post("/create_task_template", authenticateToken, upload.single('image'), createTaskTemplate);
 router.get("/get_all_task_template",authenticateToken,getAllTaskTemplate);
 router.post("/create", authenticateToken, createTask);
 router.put("/status/:taskId",authenticateUnifiedToken,updateTaskStatus);

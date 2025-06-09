@@ -7,10 +7,10 @@ const errorMiddleware = require("../Middlewares/error");
 
 // Define the allowed origins
 const allowedOrigins = [
-    "https://xplore-instant.vercel.app",
-    "https://pre.xplore.xircular.io",
+    // "https://xplore-instant.vercel.app",
+    // "https://pre.xplore.xircular.io",
     "http://localhost:5173",
-    "https://xplr.live"
+    // "https://xplr.live"
 ];
 // Configure CORS middleware
 app.use(cors({
@@ -35,6 +35,7 @@ const parentRouter = require("./parentRoutes");
 const childRouter = require("./childRoutes");
 const taskRouter = require("./taskRoutes");
 const adminRouter = require("./adminRoutes");
+const productRouter = require("./productRoutes");
 // const blogRouter = require("./blogRoutes");
 
 
@@ -42,6 +43,7 @@ const adminRouter = require("./adminRoutes");
 app.use("/parent", parentRouter);
 app.use("/child", childRouter);
 app.use("/admin", adminRouter);
+app.use("/product", productRouter);
 // app.use("/blog", blogRouter);
 app.use("/task", taskRouter);
 

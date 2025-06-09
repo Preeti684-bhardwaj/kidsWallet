@@ -14,7 +14,7 @@ const asyncHandler = require("../Utils/asyncHandler");
 
 //---------------------Create a new task template (Both Parent and Admin)------------------------------------
 const createTaskTemplate = asyncHandler(async (req, res, next) => {
-  const { title, description, image } = req.body;
+  const { title, description } = req.body;
   
   try {
     // Validate title
@@ -42,11 +42,29 @@ const createTaskTemplate = asyncHandler(async (req, res, next) => {
       );
     }
     
+    // Handle image upload if file is provided
+    let imageData = null;
+    if (req.file) {
+      try {
+        const uploadResult = await uploadFile(req.file);
+        imageData = {
+          url: uploadResult.url,
+          filename: uploadResult.filename,
+          originalName: uploadResult.originalName,
+          size: uploadResult.size,
+          mimetype: uploadResult.mimetype
+        };
+      } catch (uploadError) {
+        console.error("Image upload error:", uploadError);
+        return next(new ErrorHandler("Failed to upload image", 500));
+      }
+    }
+    
     // Prepare data based on user type
     let taskTemplateData = {
       title: trimmedTitle,
       description,
-      image
+      image: imageData
     };
     
     if (req.userType === "parent") {
@@ -410,14 +428,16 @@ const listTasks = asyncHandler(async (req, res, next) => {
     console.log(userId);
 
     // Extract query parameters for filtering
-  
-    // Extract query parameters for filtering
     const { status, difficulty, dueDateFrom, dueDateTo, childId} = req.query;
 
     // Validate query parameters
     const { errors, page: validatedPage, limit: validatedLimit } = validateQueryParams(req.query);
     if (errors.length > 0) {
-      return res.status(400).json({ success: false, message: 'Validation errors', errors });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Validation errors', 
+        errors 
+      });
     }
 
     const where = {};
@@ -428,8 +448,12 @@ const listTasks = asyncHandler(async (req, res, next) => {
       },
     ];
 
-    // Apply filters
-    if (status) where.status = status;
+    // Apply filters - Modified status handling
+    if (status && status !== 'ALL') {
+      where.status = status;
+    }
+    // If status is 'ALL' or not provided, don't filter by status
+    
     if (difficulty) where.difficulty = difficulty;
     if (dueDateFrom || dueDateTo) {
       where.dueDate = {};
@@ -438,17 +462,25 @@ const listTasks = asyncHandler(async (req, res, next) => {
     }
 
     // Role-based logic
-    if (userType=== 'parent') {
+    if (userType === 'parent') {
       // Verify parent has access to the child (if childId is provided)
       if (childId) {
-        const child = await models.Child.findOne({ where: { id: childId, parentId:userId} });
+        const child = await models.Child.findOne({ 
+          where: { id: childId, parentId: userId} 
+        });
         if (!child) {
-          return res.status(403).json({ success: false, message: 'Child not found or not authorized' });
+          return res.status(403).json({ 
+            success: false, 
+            message: 'Child not found or not authorized' 
+          });
         }
         where.childId = childId;
       } else {
         // Get all children of the parent
-        const children = await models.Child.findAll({ where: { parentId: userId}, attributes: ['id'] });
+        const children = await models.Child.findAll({ 
+          where: { parentId: userId}, 
+          attributes: ['id'] 
+        });
         const childIds = children.map((child) => child.id);
         where.childId = { [Op.in]: childIds.length > 0 ? childIds : [null] }; // Handle no children
       }
@@ -456,10 +488,16 @@ const listTasks = asyncHandler(async (req, res, next) => {
       // Children can only see their own tasks
       where.childId = userId;
       if (childId && childId !== userId) {
-        return res.status(403).json({ success: false, message: 'Unauthorized to view tasks for other children' });
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Unauthorized to view tasks for other children' 
+        });
       }
     } else {
-      return res.status(403).json({ success: false, message: 'Invalid user role' });
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Invalid user role' 
+      });
     }
 
     // Fetch tasks with pagination
@@ -506,15 +544,28 @@ const listTasks = asyncHandler(async (req, res, next) => {
           limit: validatedLimit,
           totalPages: Math.ceil(count / validatedLimit),
         },
+        // Add filter summary for better understanding
+        appliedFilters: {
+          status: status || 'ALL',
+          difficulty: difficulty || 'ALL',
+          dueDateFrom: dueDateFrom || null,
+          dueDateTo: dueDateTo || null,
+          childId: childId || (userType === 'parent' ? 'ALL_CHILDREN' : userId)
+        }
       },
     };
 
     return res.status(200).json(response);
   } catch (error) {
     console.error('Error listing tasks:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error', 
+      error: error.message 
+    });
   }
 });
+
 
 // Mark task as completed (Child only)
 const updateTaskStatus = asyncHandler(async (req, res, next) => {

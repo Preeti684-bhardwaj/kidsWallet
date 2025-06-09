@@ -13,6 +13,7 @@ const {
 const sendEmail = require("../Utils/sendEmail");
 const ErrorHandler = require("../Utils/errorHandle");
 const asyncHandler = require("../Utils/asyncHandler");
+const { uploadFile, deleteFile } = require("../Utils/cdnImplementation");
 
 // const {
 //   KALEYRA_BASE_URL,
@@ -31,16 +32,35 @@ const asyncHandler = require("../Utils/asyncHandler");
 // const QR_EXPIRY_TIME = 5 * 60 * 1000;
 
 // ---------------signup------------------------------------------------
+// ---------------signup------------------------------------------------
 const signup = asyncHandler(async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const { name, countryCode, phone, email, gender, image, password } =
-      req.body;
+    const { name, countryCode, phone, email, gender, password } = req.body;
+    
+    // Handle image upload if file is provided
+    let imageData = null;
+    if (req.file) {
+      try {
+        const uploadResult = await uploadFile(req.file);
+        imageData = {
+          url: uploadResult.url,
+          filename: uploadResult.filename,
+          originalName: uploadResult.originalName,
+          size: uploadResult.size,
+          mimetype: uploadResult.mimetype
+        };
+      } catch (uploadError) {
+        console.error('Image upload failed:', uploadError);
+        return next(new ErrorHandler("Image upload failed", 500));
+      }
+    }
 
     // Validation - only check required fields (name, email, password)
     if ([name, email, password].some((field) => field?.trim() === "")) {
       return next(new ErrorHandler("All required fields must be filled", 400));
     }
+    
     // Validate input fields
     if (!name) {
       return next(new ErrorHandler("Name is missing", 400));
@@ -51,10 +71,12 @@ const signup = asyncHandler(async (req, res, next) => {
     if (!password) {
       return next(new ErrorHandler("Password is missing", 400));
     }
+    
     // Sanitize name: trim and reduce multiple spaces to a single space
     name.trim().replace(/\s+/g, " ");
     // Convert the email to lowercase for case-insensitive comparison
     const lowercaseEmail = email.trim().toLowerCase();
+    
     // Validate name
     const nameError = isValidLength(name);
     if (nameError) {
@@ -138,7 +160,7 @@ const signup = asyncHandler(async (req, res, next) => {
         password: hashedPassword,
         name,
         gender,
-        image,
+        image: imageData, // Store image data as JSON
       },
       { transaction }
     );
@@ -555,9 +577,38 @@ const getParentDetailById = asyncHandler(async (req, res, next) => {
 const updateProfile = asyncHandler(async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const allowedFields = ["name", "image", "country", "currency"];
-    // const { name, image ,country, currency } = req.body;
+    const allowedFields = ["name", "country", "currency"];
     const parent = req.parent;
+    
+    // Handle image upload if file is provided
+    let imageData = parent.image; // Keep existing image by default
+    if (req.file) {
+      try {
+        // Delete old image if it exists
+        if (parent.image && parent.image.filename) {
+          try {
+            await deleteFile(parent.image.filename);
+          } catch (deleteError) {
+            console.warn('Failed to delete old image:', deleteError.message);
+            // Continue with upload even if delete fails
+          }
+        }
+        
+        // Upload new image
+        const uploadResult = await uploadFile(req.file);
+        imageData = {
+          url: uploadResult.url,
+          filename: uploadResult.filename,
+          originalName: uploadResult.originalName,
+          size: uploadResult.size,
+          mimetype: uploadResult.mimetype
+        };
+      } catch (uploadError) {
+        await transaction.rollback();
+        console.error('Image upload failed:', uploadError);
+        return next(new ErrorHandler("Image upload failed", 500));
+      }
+    }
 
     // Filter and validate incoming fields
     const inputKeys = Object.keys(req.body);
@@ -566,6 +617,7 @@ const updateProfile = asyncHandler(async (req, res, next) => {
     );
 
     if (invalidFields.length > 0) {
+      await transaction.rollback();
       return next(
         new ErrorHandler(
           `Invalid fields in request: ${invalidFields.join(", ")}`,
@@ -573,20 +625,24 @@ const updateProfile = asyncHandler(async (req, res, next) => {
         )
       );
     }
+    
     // Sanitize and validate 'name' if present
     if (req.body.name) {
       const sanitizedName = req.body.name.trim().replace(/\s+/g, " ");
       const nameError = isValidLength(sanitizedName);
       if (nameError) {
+        await transaction.rollback();
         return next(new ErrorHandler(nameError, 400));
       }
       parent.name = sanitizedName;
     }
 
     // Update only allowed fields if they exist
-    if (req.body.image) parent.image = req.body.image;
     if (req.body.country) parent.country = req.body.country;
     if (req.body.currency) parent.currency = req.body.currency;
+    
+    // Update image data
+    parent.image = imageData;
 
     await parent.save({ transaction });
     await transaction.commit();
@@ -614,12 +670,30 @@ const createChild = asyncHandler(async (req, res, next) => {
       name,
       age,
       username,
-      profilePicture,
       gender,
       password,
       hasBlogAccess,
       deviceSharingMode,
     } = req.body;
+    
+    // Handle profile picture upload if file is provided
+    let profilePictureData = null;
+    if (req.file) {
+      try {
+        const uploadResult = await uploadFile(req.file);
+        profilePictureData = {
+          url: uploadResult.url,
+          filename: uploadResult.filename,
+          originalName: uploadResult.originalName,
+          size: uploadResult.size,
+          mimetype: uploadResult.mimetype
+        };
+      } catch (uploadError) {
+        console.error('Profile picture upload failed:', uploadError);
+        return next(new ErrorHandler("Profile picture upload failed", 500));
+      }
+    }
+    
     // Sanitize name: trim and reduce multiple spaces to a single space
     const sanitizedName = name.trim().replace(/\s+/g, " ");
     const sanatizedUsername = username.trim().replace(/\s+/g, " ");
@@ -671,7 +745,7 @@ const createChild = asyncHandler(async (req, res, next) => {
       name: sanitizedName,
       age,
       gender,
-      profilePicture,
+      profilePicture: profilePictureData, // Store as JSON
       username: sanatizedUsername,
       password: hashedPassword || null,
       parentId,
@@ -787,6 +861,7 @@ const getChildById = asyncHandler(async (req, res, next) => {
 });
 
 // --------update child profile--------------------------------------
+// --------update child profile--------------------------------------
 const updateChildProfile = asyncHandler(async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
@@ -813,6 +888,36 @@ const updateChildProfile = asyncHandler(async (req, res, next) => {
           403
         )
       );
+    }
+    
+    // Handle profile picture upload if file is provided
+    let profilePictureData = child.profilePicture; // Keep existing image by default
+    if (req.file) {
+      try {
+        // Delete old profile picture if it exists
+        if (child.profilePicture && child.profilePicture.filename) {
+          try {
+            await deleteFile(child.profilePicture.filename);
+          } catch (deleteError) {
+            console.warn('Failed to delete old profile picture:', deleteError.message);
+            // Continue with upload even if delete fails
+          }
+        }
+        
+        // Upload new profile picture
+        const uploadResult = await uploadFile(req.file);
+        profilePictureData = {
+          url: uploadResult.url,
+          filename: uploadResult.filename,
+          originalName: uploadResult.originalName,
+          size: uploadResult.size,
+          mimetype: uploadResult.mimetype
+        };
+      } catch (uploadError) {
+        await transaction.rollback();
+        console.error('Profile picture upload failed:', uploadError);
+        return next(new ErrorHandler("Profile picture upload failed", 500));
+      }
     }
 
     // Prevent updating coinBalance

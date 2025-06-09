@@ -29,7 +29,7 @@ const sortRecurrenceDates = (dates) => {
 const validateQueryParams = (query) => {
   const errors = [];
 
-  if (query.status && !['UPCOMING','PENDING', 'COMPLETED', 'APPROVED', 'REJECTED', 'OVERDUE'].includes(query.status)) {
+  if (query.status && !['ALL','UPCOMING','PENDING', 'COMPLETED', 'APPROVED', 'REJECTED', 'OVERDUE'].includes(query.status)) {
     errors.push('Invalid status. Must be UPCOMING,PENDING, COMPLETED, APPROVED, REJECTED, or OVERDUE');
   }
 

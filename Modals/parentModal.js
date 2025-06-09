@@ -11,7 +11,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
       image :{
-        type: DataTypes.STRING,
+        type: DataTypes.JSON,
         allowNull: true
       },
       gender :{

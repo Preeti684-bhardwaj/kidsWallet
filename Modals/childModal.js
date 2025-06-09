@@ -31,7 +31,7 @@ const Child = sequelize.define('Child', {
       allowNull: true
     },
     profilePicture: {
-      type: DataTypes.STRING,
+      type: DataTypes.JSON,
       allowNull: true
     },
     coinBalance: {
@@ -49,7 +49,7 @@ const Child = sequelize.define('Child', {
     deviceSharingMode: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
-    }
+    },
   },
  {
     timestamps: true

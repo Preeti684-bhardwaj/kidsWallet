@@ -71,6 +71,45 @@ exports.authenticateToken = async (req, res, next) => {
   }
 };
 
+exports.authenticateAdminToken = async (req, res, next) => {
+  try {
+    // Get the token from Authorization header
+    const bearerHeader = req.headers["authorization"];
+
+    // Check if bearer header exists
+    if (!bearerHeader) {
+      return next(new ErrorHandler("Access Denied.", 401));
+    }
+
+    // Extract the token
+    // Format in Postman: "Bearer eyJhbGciOiJIUzI1NiIs..."
+    const token = bearerHeader.replace("Bearer ", "").trim();
+
+    if (!token) {
+      return next(new ErrorHandler("Authentication token required.", 401));
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // console.log(decoded);
+    // Find admin
+    const admin = await models.Admin.findOne({
+      where: { id: decoded.obj.id },
+      attributes: { exclude: ["password"] },
+    });
+
+    if (!admin) {
+      return res.status(404).json({ error: "Admin not found" });
+    }
+    
+    req.admin = admin;
+    req.token = token;
+    
+    next();
+  } catch (error) {
+    console.log("Admin authentication error:", error.message);
+    return res.status(403).json({ error: "Invalid token" });
+  }
+}
 
 exports.verifyUserAgent = async (req, res, next) => {
   try {
