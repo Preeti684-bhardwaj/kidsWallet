@@ -47,7 +47,7 @@ const generateUniqueFileName = (originalName) => {
 const generateFileUrl = (fileName) => {
   // If CDN is enabled, use CDN domain, otherwise fallback to original endpoint
   const domain = cdnConfig.enabled ? cdnConfig.domain : process.env.ENDPOINT;
-  return `https://${domain}/innovative/Kidswallet/${fileName}`;
+  return `https://${domain}/innovative/${fileName}`;
 };
 
 // -----------------Upload a single file------------------------------------- 
