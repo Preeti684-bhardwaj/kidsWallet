@@ -9,6 +9,7 @@ const {
   validateQueryParams
 } = require("../Utils/taskHelper");
 const { v4: uuidv4, validate: isValidUUID } = require('uuid');
+const { uploadFile, deleteFile } = require("../Utils/cdnImplementation");
 const ErrorHandler = require("../Utils/errorHandle");
 const asyncHandler = require("../Utils/asyncHandler");
 
