@@ -1,6 +1,7 @@
 const Minio = require('minio');
 const crypto = require('crypto');
 const path = require('path');
+const { log } = require('console');
 
 // -----------------MinIO client instance-----------------------------------
 const minioClient = new Minio.Client({
@@ -159,11 +160,17 @@ const listFiles = async (prefix = '') => {
     
     return new Promise((resolve, reject) => {
       stream.on('data', (obj) => {
+        // console.log('Object:', obj);
+        
+        // Extract just the filename from the full object path
+        // obj.name might be something like "Kidswallet/1234567890-abcdef12.jpg"
+        const fileName = obj.name.split('/').pop(); // Get the last part after the slash
+        
         files.push({
           name: obj.name,
           size: obj.size,
           lastModified: obj.lastModified,
-          url: generateFileUrl(obj.name),
+          url: generateFileUrl(fileName), // Now correctly generates URL with the filename only
           cdnEnabled: cdnConfig.enabled
         });
       });
