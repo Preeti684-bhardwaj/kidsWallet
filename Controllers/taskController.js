@@ -1061,6 +1061,7 @@ const updateTaskTemplateAndTasks = asyncHandler(async (req, res, next) => {
       : recurringDates
     : [];
 
+    
   if (!userType || !userId) {
     return next(new ErrorHandler("Invalid authentication token", 401));
   }
