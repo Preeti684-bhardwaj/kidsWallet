@@ -745,11 +745,11 @@ const createTask = asyncHandler(async (req, res, next) => {
         return next(new ErrorHandler(`Invalid date: ${date}`, 400));
       }
       // Block past dates for all recurrences
-      // if (parsedDate.isBefore(today)) {
-      //   return next(
-      //     new ErrorHandler(`Past date ${date} is not allowed in recurrenceDates`, 400)
-      //   );
-      // }
+//      if (parsedDate.isBefore(today)) {
+  //      return next(
+    //      new ErrorHandler(`Past date ${date} is not allowed in recurrenceDates`, 400)
+      //  );
+     // }
       // For MONTHLY, ensure all dates are in the same month
       if (recurrence === "MONTHLY") {
         const firstDate = moment.tz(
