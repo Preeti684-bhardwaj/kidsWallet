@@ -188,7 +188,7 @@ const asyncHandler = require("../Utils/asyncHandler");
 
       // Fetch notifications for the child
       const notifications = await models.Notification.findAll({
-        where: { recipientId: childId },
+        where: { recipientId: childId ,isRead: false},
         order: [["createdAt", "DESC"]],
       });
 

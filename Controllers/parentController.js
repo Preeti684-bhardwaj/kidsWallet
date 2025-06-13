@@ -549,7 +549,7 @@ const getParentDetail = asyncHandler(async (req, res, next) => {
 // --------------get parent detail by id------------------------------------------
 const getParentDetailById = asyncHandler(async (req, res, next) => {
   try {
-    const parentId = req.params.id; // assuming parentId is passed as a URL parameter
+    const parentId = req.params.parentId; // assuming parentId is passed as a URL parameter
     const parent = await models.Parent.findByPk(parentId, {
       attributes: {
         exclude: ["password", "otp", "otpExpire"],
@@ -861,7 +861,6 @@ const getChildById = asyncHandler(async (req, res, next) => {
 });
 
 // --------update child profile--------------------------------------
-// --------update child profile--------------------------------------
 const updateChildProfile = asyncHandler(async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
@@ -1049,7 +1048,7 @@ const getParentNotifications = asyncHandler(async (req, res, next) => {
     const parentId = req.parent.id;
     // Find notifications for the parent
     const notifications = await models.Notification.findAll({
-      where: { recipientId: parentId, recipientType: "parent" },
+      where: { recipientId: parentId, recipientType: "parent", isRead: false },
       order: [["createdAt", "DESC"]],
     });
 

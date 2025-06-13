@@ -203,6 +203,28 @@ const getAdminDetail = asyncHandler(async (req, res, next) => {
     return next(new ErrorHandler(error.message, 500));
   }
 });
+ 
+const getAllParents = asyncHandler(async (req, res, next) => {
+  try {
+    const parents = await models.Parent.findAll({
+      attributes: ["id", "email", "name", "image","gender","isActive","isEmailVerified","createdAt","updatedAt"],
+      order: [["createdAt", "DESC"]],
+    });
+
+    if (!parents || parents.length === 0) {
+      return next(new ErrorHandler("No users found",404));
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Users retrieved successfully",
+      data: parents,
+    });
+  } catch (error) {
+    console.error("Error retrieving parents:", error);
+    return next(new ErrorHandler(error.message || "Failed to retrieve parents", 500));
+  }
+});
 
 //--------------------create child profile--------------------------------------------------
 // const createChild = asyncHandler(async (req, res, next) => {
@@ -360,6 +382,7 @@ module.exports = {
   login,
   resetPassword,
   getAdminDetail,
+  getAllParents,
 //   createChild,
   deleteUserByEmail,
   deleteProfile,

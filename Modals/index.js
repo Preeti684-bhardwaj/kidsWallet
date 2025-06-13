@@ -131,6 +131,10 @@ models.ProductInventory.belongsTo(models.ProductLocation, {
     foreignKey: "location_id",
     as: "inventories",
   });
+
+models.db = db;
+module.exports = models;
+
 //-----------------InventoryLocation <-> Brand (One-to-Many)------------------------------------------
 // db.User.hasMany(db.InventoryLocation, {foreignKey: "userId",as: "user"});
 // db.InventoryLocation.belongsTo(db.User, {foreignKey: "userId",as: "user"});
@@ -159,6 +163,3 @@ models.ProductInventory.belongsTo(models.ProductLocation, {
 // Follower.belongsTo(Child, { as: 'following', foreignKey: 'followingId' });
 // Parent.hasMany(Follower, { foreignKey: 'approvedById' });
 // Follower.belongsTo(Parent, { foreignKey: 'approvedById' });
-
-models.db = db;
-module.exports = models;

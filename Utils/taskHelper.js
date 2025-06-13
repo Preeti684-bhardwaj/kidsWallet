@@ -1,6 +1,9 @@
 const { Op } = require('sequelize');
 const moment = require('moment');
 const { v4: uuidv4, validate: isValidUUID } = require('uuid');
+const asyncHandler = require('../Utils/asyncHandler');
+const ErrorHandler = require('../Utils/errorHandle');
+const models = require('../Modals/index'); // Assuming you have an index file that exports all models
 
 // Calculate default reward coins based on difficulty and title
 const calculateDefaultReward = (title, difficulty) => {
@@ -67,6 +70,64 @@ const validateQueryParams = (query) => {
   return { errors, page, limit };
 };
 
+
+//--------------------Additional helper function for getting filter options---------------------------------------------------------
+// const getTaskTemplateFilterOptions = asyncHandler(async (req, res, next) => {
+//   try {
+//     let options = {
+//       sortOptions: [
+//         { value: 'createdAt', label: 'Created Date' },
+//         { value: 'updatedAt', label: 'Updated Date' },
+//         { value: 'title', label: 'Title' }
+//       ],
+//       sortOrders: [
+//         { value: 'DESC', label: 'Descending' },
+//         { value: 'ASC', label: 'Ascending' }
+//       ],
+//       createdByOptions: [
+//         { value: 'all', label: 'All' },
+//         { value: 'parent', label: 'Parents' },
+//         { value: 'admin', label: 'Admins' }
+//       ]
+//     };
+
+//     if (req.userType === "admin") {
+//       // For admins, also provide list of parents and admins for filtering
+//       const [parents, admins] = await Promise.all([
+//         models.Parent.findAll({
+//           attributes: ['id', 'email'],
+//           order: [['createdAt', 'DESC']]
+//         }),
+//         models.Admin.findAll({
+//           attributes: ['id', 'email'],
+//           order: [['createdAt', 'DESC']]
+//         })
+//       ]);
+
+//       options.parents = parents.map(parent => ({
+//         value: parent.id,
+//         label: `${parent.firstName || ''} ${parent.lastName || ''}`.trim() || parent.email
+//       }));
+
+//       options.admins = admins.map(admin => ({
+//         value: admin.id,
+//         label: `${admin.firstName || ''} ${admin.lastName || ''}`.trim() || admin.email
+//       }));
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Filter options fetched successfully",
+//       data: options
+//     });
+//   } catch (error) {
+//     console.error("Error fetching filter options:", error);
+//     return next(
+//       new ErrorHandler(error.message || "Failed to fetch filter options", 500)
+//     );
+//   }
+// });
+
 // // // Check if a task is overdue based on dueTime
 // const isTaskOverdue = (task) => {
 //   const now = moment();
@@ -111,8 +172,9 @@ const validateQueryParams = (query) => {
 module.exports = {
   calculateDefaultReward,
   sortRecurrenceDates,
-  // isTaskOverdue,
-  // updateTaskStatus,
-  // generateNextOccurrences,
   validateQueryParams
 };
+// getTaskTemplateFilterOptions,
+// isTaskOverdue,
+// updateTaskStatus,
+// generateNextOccurrences,
