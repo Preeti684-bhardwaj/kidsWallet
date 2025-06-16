@@ -1520,21 +1520,20 @@ const updateTaskStatus = asyncHandler(async (req, res, next) => {
 
     const t = await sequelize.transaction();
     try {
-      // Mark notification as read if notificationId is provided
-      // if (notificationId) {
-      //   const notification = await models.Notification.findOne({
-      //     where: { 
-      //       id: notificationId,
-      //       recipientType: userType,
-      //       recipientId: userId 
-      //     },
-      //     transaction: t
-      //   });
-
-      //   // if (notification && !notification.isRead) {
-      //   //   await notification.update({ isRead: true }, { transaction: t });
-      //   // }
-      // }
+      // Mark related notifications as read for the current user
+      await models.Notification.update(
+        { isRead: true },
+        {
+          where: {
+            relatedItemType: 'task',
+            relatedItemId: taskId,
+            recipientType: userType,
+            recipientId: userId,
+            isRead: false
+          },
+          transaction: t
+        }
+      );
 
       if (status === "COMPLETED") {
         // Child marking task as completed

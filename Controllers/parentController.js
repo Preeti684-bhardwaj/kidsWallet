@@ -1,6 +1,7 @@
 const bcrypt = require("bcrypt");
 const models = require("../Modals/index");
 const db = require("../Configs/db/DbConfig");
+const { Op, literal } = require("sequelize");
 const sequelize = db.sequelize;
 const { generateToken, generateOTP } = require("../Utils/parentHelper");
 const { phoneValidation } = require("../Utils/phoneValidation");
@@ -1046,22 +1047,94 @@ const updateChildProfile = asyncHandler(async (req, res, next) => {
 const getParentNotifications = asyncHandler(async (req, res, next) => {
   try {
     const parentId = req.parent.id;
-    // Find notifications for the parent
-    const notifications = await models.Notification.findAll({
-      where: { recipientId: parentId, recipientType: "parent", isRead: false },
-      order: [["createdAt", "DESC"]],
+    
+    // Extract query parameters
+    const {
+      page = 1,
+      limit = 10,
+      type,
+      isRead,
+      relatedItemType,
+      startDate,
+      endDate,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC'
+    } = req.query;
+
+    // Calculate offset for pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build where clause
+    const whereClause = {
+      recipientId: parentId,
+      recipientType: "parent"
+    };
+
+    // Apply filters
+    if (type) {
+      whereClause.type = type;
+    }
+
+    if (isRead !== undefined) {
+      whereClause.isRead = isRead === 'true';
+    }
+
+    if (relatedItemType) {
+      whereClause.relatedItemType = relatedItemType;
+    }
+
+    // Date range filter
+    if (startDate || endDate) {
+      whereClause.createdAt = {};
+      if (startDate) {
+        whereClause.createdAt[Op.gte] = new Date(startDate);
+      }
+      if (endDate) {
+        whereClause.createdAt[Op.lte] = new Date(endDate);
+      }
+    }
+
+    // Validate sort parameters
+    const allowedSortFields = ['createdAt', 'updatedAt', 'type', 'isRead'];
+    const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    const sortDirection = ['ASC', 'DESC'].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
+
+    // Find notifications with pagination
+    const { count, rows: notifications } = await models.Notification.findAndCountAll({
+      where: whereClause,
+      order: [[sortField, sortDirection]],
+      limit: parseInt(limit),
+      offset: offset,
     });
 
-    // Update the isRead status to true for all fetched notifications
-    // await models.Notification.update(
-    //   { isRead: true },
-    //   { where: { recipientId: parentId } }
-    // );
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(count / parseInt(limit));
+    const hasNextPage = parseInt(page) < totalPages;
+    const hasPrevPage = parseInt(page) > 1;
 
     return res.status(200).json({
       success: true,
       message: "Notifications retrieved successfully",
       data: notifications,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalItems: count,
+        itemsPerPage: parseInt(limit),
+        hasNextPage,
+        hasPrevPage,
+        nextPage: hasNextPage ? parseInt(page) + 1 : null,
+        prevPage: hasPrevPage ? parseInt(page) - 1 : null
+      },
+      filters: {
+        type,
+        isRead,
+        relatedItemType,
+        startDate,
+        endDate,
+        sortBy: sortField,
+        sortOrder: sortDirection
+      }
     });
   } catch (error) {
     console.error("Error retrieving notifications:", error);
