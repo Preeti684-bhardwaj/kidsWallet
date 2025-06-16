@@ -1053,10 +1053,10 @@ const getParentNotifications = asyncHandler(async (req, res, next) => {
     });
 
     // Update the isRead status to true for all fetched notifications
-    await models.Notification.update(
-      { isRead: true },
-      { where: { recipientId: parentId } }
-    );
+    // await models.Notification.update(
+    //   { isRead: true },
+    //   { where: { recipientId: parentId } }
+    // );
 
     return res.status(200).json({
       success: true,

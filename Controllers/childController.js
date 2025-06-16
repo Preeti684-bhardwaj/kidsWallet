@@ -199,10 +199,10 @@ const asyncHandler = require("../Utils/asyncHandler");
         );
       }
       // Update the isRead status to true for all fetched notifications
-      await models.Notification.update(
-        { isRead: true },
-        { where: { recipientId: childId } }
-      );
+      // await models.Notification.update(
+      //   { isRead: true },
+      //   { where: { recipientId: childId } }
+      // );
 
       return res.status(200).json({ success: true, data: notifications });
     } catch (error) {
