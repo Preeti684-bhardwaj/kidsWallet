@@ -1,5 +1,5 @@
 const db = require('../Configs/db/DbConfig');
-const taskTemplateModal = require('./taskTemplateModal');
+
 
 // Import models
 const models = {
@@ -9,6 +9,8 @@ const models = {
     Streak: require('./streakModal')(db.sequelize, db.Sequelize.DataTypes),
     TaskTemplate: require('./taskTemplateModal')(db.sequelize, db.Sequelize.DataTypes),
     Task: require('./taskModal')(db.sequelize, db.Sequelize.DataTypes),
+    // GoalTemplate: require('./goalTemplateModal')(db.sequelize, db.Sequelize.DataTypes),
+    // Goal: require('./goalModal')(db.sequelize, db.Sequelize.DataTypes),
     Notification: require('./notificationModal')(db.sequelize, db.Sequelize.DataTypes),
     Blog: require('./blogModal')(db.sequelize, db.Sequelize.DataTypes),
     Category: require('./product/categoryModal')(db.sequelize, db.Sequelize.DataTypes),
@@ -62,19 +64,25 @@ models.TaskTemplate.belongsTo(models.Admin, { foreignKey: 'adminId' });
 //------------------Task Template relationships-----------------------------------
 models.TaskTemplate.hasMany(models.Task, { foreignKey: 'taskTemplateId' });
 models.Task.belongsTo(models.TaskTemplate, { foreignKey: 'taskTemplateId' });
-//------------------child transaction relationships-----------------------
-models.Child.hasMany(models.Transaction, { foreignKey: 'childId' });
+//------------------child transaction relationships-------------------------------
+models.Child.hasMany(models.Transaction, { foreignKey: 'childId' });                                                                                                                                                   
 models.Transaction.belongsTo(models.Child, { foreignKey: 'childId' });
-//------------------task transaction relationships----------------------------------------
+//------------------task transaction relationships--------------------------------
 models.Task.hasMany(models.Transaction, { foreignKey: 'taskId' });
 models.Transaction.belongsTo(models.Task, { foreignKey: 'taskId' });
-//-----------------child streak relationships--------------------------------
+//------------------parent goaltemplate relation-----------------------------------
+// models.Parent.hasMany(models.GoalTemplate, { foreignKey: 'userId' , onDelete: 'CASCADE', hooks: true});
+// models.GoalTemplate.belongsTo(models.Parent, { foreignKey: 'userId' });
+// //------------------admin goaltemplate relation------------------------------------
+// models.Admin.hasMany(models.GoalTemplate, { foreignKey: 'adminId' , onDelete: 'CASCADE', hooks: true});
+// models.GoalTemplate.belongsTo(models.Admin, { foreignKey: 'adminId' });
+//-----------------child streak relationships----------------------------------------
 models.Child.hasOne(models.Streak, { foreignKey: 'childId' , onDelete: 'CASCADE', hooks: true});
 models.Streak.belongsTo(models.Child, { foreignKey: 'childId' });
-//------------------child blog relationships-------------------------------------
+//------------------child blog relationships-------------------------------------------
 models.Child.hasMany(models.Blog, { foreignKey: 'authorId', as: 'authoredBlogs',  onDelete: 'CASCADE', hooks: true});
 models.Blog.belongsTo(models.Child, { foreignKey: 'authorId', as: 'author' });
-//------------------parent blog relationships-------------------------------------
+//------------------parent blog relationships------------------------------------------
 models.Parent.hasMany(models.Blog, { foreignKey: 'approvedById' , onDelete: 'CASCADE', hooks: true});
 models.Blog.belongsTo(models.Parent, { foreignKey: 'approvedById', as: 'approver' });
 //-------------Category <-> Category (Self-referential One-to-Many)--------------------------------

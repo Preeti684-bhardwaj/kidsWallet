@@ -8,6 +8,7 @@ const {
     getAllTaskTemplate,
     updateTaskStatus,
     updateTaskTemplateAndTasks,
+    getTaskWithTemplateDetails,
     // updateTaskReward,
     deleteTasksByTemplate,
     deleteTask,
@@ -23,6 +24,7 @@ const upload = require("../Middlewares/multer");
 router.post("/create_task_template", authenticateToken, upload.single('image'), createTaskTemplate);
 router.get("/get_all_task_template",authenticateToken,getAllTaskTemplate);
 router.get("/by-template/:taskTemplateId", authenticateUnifiedToken, getTasksByTemplateId);
+router.get("/get_specific_task/details/:taskId",authenticateToken,getTaskWithTemplateDetails);
 router.post("/create", authenticateToken, createTask);
 router.put("/status/:taskId",authenticateUnifiedToken,updateTaskStatus);
 router.put(

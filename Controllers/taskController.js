@@ -1036,6 +1036,526 @@ const listTasks = asyncHandler(async (req, res, next) => {
   }
 });
 
+//---------------- Get specific task with template details (Parent and Child)-----------------------------
+const getTaskWithTemplateDetails = asyncHandler(async (req, res, next) => {
+  try {
+    const { taskId } = req.params;
+    
+    // Get user type and ID from auth middleware
+    const userType = req.userType; // This comes from your auth middleware
+    const userId = req.parent?.id || req.admin?.id;
+    
+    console.log("userType :", userType, "userId:", userId, "taskId:", taskId);
+    
+    // Validate user authentication
+    if (!userType || !userId) {
+      return next(new ErrorHandler("Invalid authentication token", 401));
+    }
+
+    // Validate taskId
+    if (!isValidUUID(taskId)) {
+      return next(new ErrorHandler("Invalid taskId. Must be a valid UUID", 400));
+    }
+
+    // Fetch task with all related data
+    const task = await models.Task.findByPk(taskId, {
+      include: [
+        {
+          model: models.TaskTemplate,
+          attributes: ["id", "title", "description", "image", "userId", "adminId", "createdAt", "updatedAt"],
+          include: [
+            {
+              model: models.Parent,
+              attributes: ["id", "email"],
+              required: false,
+            },
+            {
+              model: models.Admin,
+              attributes: ["id",  "email"],
+              required: false,
+            },
+          ],
+        },
+        {
+          model: models.Child,
+          as: "Child",
+          attributes: ["id",  "parentId"],
+          include: [
+            {
+              model: models.Parent,
+              as: "parent",
+              attributes: ["id", "email"],
+              required: false,
+            },
+          ],
+        },
+        {
+          model: models.Parent,
+          attributes: ["id", "email"],
+          required: false,
+        },
+      ],
+    });
+
+    if (!task) {
+      return next(new ErrorHandler("Task not found", 404));
+    }
+
+    // Authorization checks based on user type
+    if (userType === "parent") {
+      // Parent can access:
+      // 1. Tasks assigned to their children
+      // 2. Tasks created by them
+      const isParentTask = task.parentId === userId;
+      const isChildOfParent = task.Child && task.Child.parentId === userId;
+      
+      if (!isParentTask && !isChildOfParent) {
+        return next(new ErrorHandler("Not authorized to access this task", 403));
+      }
+
+      // Additional validation for template access
+      if (task.TaskTemplate) {
+        const template = task.TaskTemplate;
+        // Parent can access:
+        // 1. Templates created by themselves (userId matches)
+        // 2. Templates created by admin (adminId exists, userId is null)
+        const isOwnTemplate = template.userId === userId;
+        const isAdminTemplate = template.adminId && !template.userId;
+        
+        if (!isOwnTemplate && !isAdminTemplate) {
+          return next(new ErrorHandler("Not authorized to access this task template", 403));
+        }
+      }
+    } else if (userType === "child") {
+      // Child can only access their own tasks
+      if (task.childId !== userId) {
+        return next(new ErrorHandler("Not authorized to access this task", 403));
+      }
+    }
+
+    // Format the response data
+    const taskData = {
+      id: task.id,
+      dueDate: task.dueDate,
+      dueTime: task.dueTime,
+      duration: task.duration,
+      recurrence: task.recurrence,
+      status: task.status,
+      rewardCoins: task.rewardCoins,
+      difficulty: task.difficulty,
+      isRecurring: task.isRecurring,
+      completedAt: task.completedAt,
+      approvedAt: task.approvedAt,
+      rejectedAt: task.rejectedAt,
+      rejectionReason: task.rejectionReason,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+      // Child information
+      child: task.Child ? {
+        id: task.Child.id,
+        name: task.Child.name,
+        parentId: task.Child.parentId,
+        // parent: task.Child.Parent ? {
+        //   id: task.Child.Parent.id,
+        //   // name: `${task.Child.Parent.firstName || ""} ${task.Child.Parent.lastName || ""}`.trim(),
+        //   email: task.Child.Parent.email,
+        // } : null,
+      } : null,
+      // Task creator (parent) information
+      taskCreator: task.Parent ? {
+        id: task.Parent.id,
+        // name: `${task.Parent.firstName || ""} ${task.Parent.lastName || ""}`.trim(),
+        email: task.Parent.email,
+      } : null,
+    };
+
+    // Template information
+    const templateData = task.TaskTemplate ? {
+      id: task.TaskTemplate.id,
+      title: task.TaskTemplate.title,
+      description: task.TaskTemplate.description,
+      image: task.TaskTemplate.image,
+      createdAt: task.TaskTemplate.createdAt,
+      updatedAt: task.TaskTemplate.updatedAt,
+      createdBy: task.TaskTemplate.userId ? "parent" : "admin",
+      creator: task.TaskTemplate.userId 
+        ? {
+            id: task.TaskTemplate.Parent?.id,
+            // name: `${task.TaskTemplate.Parent?.firstName || ""} ${task.TaskTemplate.Parent?.lastName || ""}`.trim(),
+            email: task.TaskTemplate.Parent?.email,
+            type: "parent",
+          }
+        : {
+            id: task.TaskTemplate.Admin?.id,
+            // name: `${task.TaskTemplate.Admin?.firstName || ""} ${task.TaskTemplate.Admin?.lastName || ""}`.trim(),
+            email: task.TaskTemplate.Admin?.email,
+            type: "admin",
+          },
+    } : null;
+
+    return res.status(200).json({
+      success: true,
+      message: "Task and template details fetched successfully",
+      data: {
+        task: taskData,
+        template: templateData,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching task with template details:", error);
+    return next(
+      new ErrorHandler(error.message || "Failed to fetch task details", 500)
+    );
+  }
+});
+//---------------- Get specific template details (Parent and Admin)-----------------------------
+// const getTaskTemplateDetails = asyncHandler(async (req, res, next) => {
+//   try {
+//     const { templateId } = req.params;
+    
+//     // Determine user type and ID
+//     const userType = req.parent?.obj ? "parent" : req.admin?.obj ? "admin" : null;
+//     const userId = req.parent?.obj?.id || req.admin?.obj?.id;
+
+//     // Validate user authentication
+//     if (!userType || !userId) {
+//       return next(new ErrorHandler("Invalid authentication token", 401));
+//     }
+
+//     // Validate templateId
+//     if (!isValidUUID(templateId)) {
+//       return next(new ErrorHandler("Invalid templateId. Must be a valid UUID", 400));
+//     }
+
+//     // Fetch template with related data
+//     const template = await models.TaskTemplate.findByPk(templateId, {
+//       include: [
+//         {
+//           model: models.Parent,
+//           attributes: ["id", "firstName", "lastName", "email"],
+//           required: false,
+//         },
+//         {
+//           model: models.Admin,
+//           attributes: ["id", "firstName", "lastName", "email"],
+//           required: false,
+//         },
+//       ],
+//     });
+
+//     if (!template) {
+//       return next(new ErrorHandler("Task template not found", 404));
+//     }
+
+//     // Authorization checks based on user type
+//     if (userType === "parent") {
+//       // Parent can access:
+//       // 1. Templates created by themselves (userId matches)
+//       // 2. Templates created by admin (adminId exists, userId is null)
+//       const isOwnTemplate = template.userId === userId;
+//       const isAdminTemplate = template.adminId && !template.userId;
+      
+//       if (!isOwnTemplate && !isAdminTemplate) {
+//         return next(new ErrorHandler("Not authorized to access this template", 403));
+//       }
+//     } else if (userType === "admin") {
+//       // Admin can only access templates created by themselves
+//       if (template.adminId !== userId) {
+//         return next(new ErrorHandler("Not authorized to access this template", 403));
+//       }
+//     }
+
+//     // Get task count for this template (based on user access)
+//     let taskCountWhere = { taskTemplateId: templateId };
+    
+//     if (userType === "parent") {
+//       // For parents, count tasks assigned to their children or created by them
+//       const children = await models.Child.findAll({
+//         where: { parentId: userId },
+//         attributes: ["id"],
+//       });
+//       const childIds = children.map((child) => child.id);
+      
+//       taskCountWhere = {
+//         taskTemplateId: templateId,
+//         [Op.or]: [
+//           { parentId: userId }, // Tasks created by this parent
+//           { childId: { [Op.in]: childIds.length > 0 ? childIds : [null] } }, // Tasks assigned to their children
+//         ],
+//       };
+//     } else if (userType === "admin") {
+//       // For admin, this might be more complex based on your business logic
+//       // For now, let's count all tasks using this template
+//       taskCountWhere = { taskTemplateId: templateId };
+//     }
+
+//     const taskCount = await models.Task.count({
+//       where: taskCountWhere,
+//     });
+
+//     // Get task status distribution
+//     const taskStatusDistribution = await models.Task.findAll({
+//       where: taskCountWhere,
+//       attributes: [
+//         "status",
+//         [sequelize.fn("COUNT", sequelize.col("status")), "count"],
+//       ],
+//       group: ["status"],
+//       raw: true,
+//     });
+
+//     // Format the response data
+//     const templateData = {
+//       id: template.id,
+//       title: template.title,
+//       description: template.description,
+//       image: template.image,
+//       createdAt: template.createdAt,
+//       updatedAt: template.updatedAt,
+//       createdBy: template.userId ? "parent" : "admin",
+//       creator: template.userId 
+//         ? {
+//             id: template.Parent?.id,
+//             name: `${template.Parent?.firstName || ""} ${template.Parent?.lastName || ""}`.trim(),
+//             email: template.Parent?.email,
+//             type: "parent",
+//           }
+//         : {
+//             id: template.Admin?.id,
+//             name: `${template.Admin?.firstName || ""} ${template.Admin?.lastName || ""}`.trim(),
+//             email: template.Admin?.email,
+//             type: "admin",
+//           },
+//       statistics: {
+//         totalTasks: taskCount,
+//         statusDistribution: taskStatusDistribution.reduce((acc, item) => {
+//           acc[item.status] = parseInt(item.count);
+//           return acc;
+//         }, {}),
+//       },
+//     };
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Template details fetched successfully",
+//       data: {
+//         template: templateData,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error fetching template details:", error);
+//     return next(
+//       new ErrorHandler(error.message || "Failed to fetch template details", 500)
+//     );
+//   }
+// });
+
+// //---------------- Get template details with associated tasks (Parent only)-----------------------------
+// const getTemplateWithTasks = asyncHandler(async (req, res, next) => {
+//   try {
+//     const { templateId } = req.params;
+//     const {
+//       status,
+//       difficulty,
+//       dueDateFrom,
+//       dueDateTo,
+//       childId,
+//       page = 1,
+//       limit = 10,
+//       historyFilter = "ALL", // ALL, TILL_TODAY, UPCOMING
+//     } = req.query;
+    
+//     // This endpoint is primarily for parents
+//     const userType = req.parent?.obj ? "parent" : null;
+//     const userId = req.parent?.obj?.id;
+
+//     // Validate user authentication
+//     if (!userType || !userId) {
+//       return next(new ErrorHandler("Invalid authentication token", 401));
+//     }
+
+//     // Validate templateId
+//     if (!isValidUUID(templateId)) {
+//       return next(new ErrorHandler("Invalid templateId. Must be a valid UUID", 400));
+//     }
+
+//     // Validate query parameters
+//     const {
+//       errors,
+//       page: validatedPage,
+//       limit: validatedLimit,
+//     } = validateQueryParams(req.query);
+//     if (errors.length > 0) {
+//       return next(
+//         new ErrorHandler(`Validation errors: ${errors.join(", ")}`, 400)
+//       );
+//     }
+
+//     // First, get and validate template access
+//     const template = await models.TaskTemplate.findByPk(templateId, {
+//       include: [
+//         {
+//           model: models.Parent,
+//           attributes: ["id", "firstName", "lastName", "email"],
+//           required: false,
+//         },
+//         {
+//           model: models.Admin,
+//           attributes: ["id", "firstName", "lastName", "email"],
+//           required: false,
+//         },
+//       ],
+//     });
+
+//     if (!template) {
+//       return next(new ErrorHandler("Task template not found", 404));
+//     }
+
+//     // Authorization check for template access
+//     const isOwnTemplate = template.userId === userId;
+//     const isAdminTemplate = template.adminId && !template.userId;
+    
+//     if (!isOwnTemplate && !isAdminTemplate) {
+//       return next(new ErrorHandler("Not authorized to access this template", 403));
+//     }
+
+//     // Build where condition for tasks
+//     const where = { taskTemplateId: templateId };
+
+//     // Apply filters
+//     if (status && status !== "ALL") {
+//       where.status = status;
+//     }
+//     if (difficulty && difficulty !== "ALL") {
+//       where.difficulty = difficulty;
+//     }
+
+//     // Handle date filters based on historyFilter
+//     const today = moment().tz("Asia/Kolkata").startOf("day");
+//     if (historyFilter === "TILL_TODAY") {
+//       where.dueDate = { [Op.lte]: today.toDate() };
+//     } else if (historyFilter === "UPCOMING") {
+//       where.dueDate = { [Op.gt]: today.toDate() };
+//     }
+
+//     // Apply additional date range filters if provided
+//     if (dueDateFrom || dueDateTo) {
+//       where.dueDate = where.dueDate || {};
+//       if (dueDateFrom) where.dueDate[Op.gte] = new Date(dueDateFrom);
+//       if (dueDateTo) where.dueDate[Op.lte] = new Date(dueDateTo);
+//     }
+
+//     // Handle child filtering
+//     if (childId) {
+//       if (!isValidUUID(childId)) {
+//         return next(new ErrorHandler("Invalid childId. Must be a valid UUID", 400));
+//       }
+//       // Verify parent has access to the child
+//       const child = await models.Child.findOne({
+//         where: { id: childId, parentId: userId },
+//       });
+//       if (!child) {
+//         return next(new ErrorHandler("Child not found or not authorized", 403));
+//       }
+//       where.childId = childId;
+//     } else {
+//       // Get all children of the parent
+//       const children = await models.Child.findAll({
+//         where: { parentId: userId },
+//         attributes: ["id"],
+//       });
+//       const childIds = children.map((child) => child.id);
+//       where.childId = { [Op.in]: childIds.length > 0 ? childIds : [null] };
+//     }
+
+//     // Fetch tasks with pagination
+//     const offset = (validatedPage - 1) * validatedLimit;
+//     const { count, rows: tasks } = await models.Task.findAndCountAll({
+//       where,
+//       include: [
+//         {
+//           model: models.Child,
+//           attributes: ["id", "name"],
+//           required: true,
+//         },
+//       ],
+//       offset,
+//       limit: validatedLimit,
+//       order: [["dueDate", historyFilter === "UPCOMING" ? "ASC" : "DESC"]],
+//     });
+
+//     // Format tasks
+//     const formattedTasks = tasks.map((task) => ({
+//       id: task.id,
+//       dueDate: moment(task.dueDate).tz("Asia/Kolkata").format("DD MMM YYYY"),
+//       dueTime: task.dueTime,
+//       status: task.status,
+//       difficulty: task.difficulty,
+//       rewardCoins: task.rewardCoins,
+//       recurrence: task.recurrence,
+//       duration: task.duration,
+//       childId: task.childId,
+//       childName: task.Child?.name,
+//       completedAt: task.completedAt,
+//       approvedAt: task.approvedAt,
+//       rejectedAt: task.rejectedAt,
+//       rejectionReason: task.rejectionReason,
+//     }));
+
+//     // Format template data
+//     const templateData = {
+//       id: template.id,
+//       title: template.title,
+//       description: template.description,
+//       image: template.image,
+//       createdAt: template.createdAt,
+//       updatedAt: template.updatedAt,
+//       createdBy: template.userId ? "parent" : "admin",
+//       creator: template.userId 
+//         ? {
+//             id: template.Parent?.id,
+//             name: `${template.Parent?.firstName || ""} ${template.Parent?.lastName || ""}`.trim(),
+//             email: template.Parent?.email,
+//             type: "parent",
+//           }
+//         : {
+//             id: template.Admin?.id,
+//             name: `${template.Admin?.firstName || ""} ${template.Admin?.lastName || ""}`.trim(),
+//             email: template.Admin?.email,
+//             type: "admin",
+//           },
+//     };
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Template with tasks fetched successfully",
+//       data: {
+//         template: templateData,
+//         tasks: formattedTasks,
+//         pagination: {
+//           total: count,
+//           page: validatedPage,
+//           limit: validatedLimit,
+//           totalPages: Math.ceil(count / validatedLimit),
+//         },
+//         appliedFilters: {
+//           status: status || "ALL",
+//           difficulty: difficulty || "ALL",
+//           dueDateFrom: dueDateFrom || null,
+//           dueDateTo: dueDateTo || null,
+//           childId: childId || "ALL_CHILDREN",
+//           historyFilter,
+//         },
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error fetching template with tasks:", error);
+//     return next(
+//       new ErrorHandler(error.message || "Failed to fetch template with tasks", 500)
+//     );
+//   }
+// });
+
 // -----------------update task and task template------------------------------------
 const updateTaskTemplateAndTasks = asyncHandler(async (req, res, next) => {
   // Parse form-data
@@ -2071,6 +2591,7 @@ module.exports = {
   listTasks,
   getTasksByTemplateId,
   updateTaskTemplateAndTasks,
+  getTaskWithTemplateDetails,
   // getChildTasks,
   // getParentTasks,
   updateTaskStatus,

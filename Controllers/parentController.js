@@ -33,7 +33,6 @@ const { uploadFile, deleteFile } = require("../Utils/cdnImplementation");
 // const QR_EXPIRY_TIME = 5 * 60 * 1000;
 
 // ---------------signup------------------------------------------------
-// ---------------signup------------------------------------------------
 const signup = asyncHandler(async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
