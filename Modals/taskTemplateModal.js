@@ -13,10 +13,10 @@ module.exports = (sequelize, DataTypes) => {
           len: { args: [2, 100], msg: 'Title must be between 2 and 100 characters' },
         },
       },
-      description: {
-        type: DataTypes.TEXT,
-        allowNull: true,
-      },
+      // description: {
+      //   type: DataTypes.TEXT,
+      //   allowNull: true,
+      // },
       image: {
         type: DataTypes.JSON,
         allowNull: true,

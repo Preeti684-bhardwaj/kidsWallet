@@ -40,18 +40,39 @@ const scheduleTaskStatusAndRecurrence = () => {
         }
       }
 
-      // Update overdue tasks
-      const now = moment().tz('Asia/Kolkata').toDate();
+      // Update overdue tasks - using dueDate and dueTime combination
       const overdueTasks = await models.Task.findAll({
         where: {
           status: 'PENDING',
-          dueDate: { [Op.lt]: now },
+          dueDate: { [Op.lt]: moment().tz('Asia/Kolkata').startOf('day').toDate() },
         },
         include: [{ model: models.TaskTemplate }],
         transaction: t,
       });
 
-      for (const task of overdueTasks) {
+      // Also check for tasks due today but past their dueTime
+      const todayOverdueTasks = await models.Task.findAll({
+        where: {
+          status: 'PENDING',
+          dueDate: {
+            [Op.gte]: today.toDate(),
+            [Op.lt]: moment(today).add(1, 'day').toDate()
+          },
+          dueTime: { [Op.ne]: null }
+        },
+        include: [{ model: models.TaskTemplate }],
+        transaction: t,
+      });
+
+      // Filter today's tasks that are past their due time
+      const currentTime = moment().tz('Asia/Kolkata').format('HH:mm');
+      const todayOverdueFiltered = todayOverdueTasks.filter(task => {
+        return task.dueTime && task.dueTime < currentTime;
+      });
+
+      const allOverdueTasks = [...overdueTasks, ...todayOverdueFiltered];
+
+      for (const task of allOverdueTasks) {
         await task.update({ status: 'OVERDUE' }, { transaction: t });
         if (task.notificationEnabled) {
           await models.Notification.create(
@@ -81,18 +102,16 @@ const scheduleTaskStatusAndRecurrence = () => {
 
       for (const task of dailyTasks) {
         const nextDueDate = moment(task.dueDate).tz('Asia/Kolkata').add(1, 'day').toDate();
-        const nextDueDateTime = moment.tz(
-          `${nextDueDate.getFullYear()}-${nextDueDate.getMonth() + 1}-${nextDueDate.getDate()} ${task.dueTime}:00`,
-          'YYYY-MM-DD HH:mm:ss',
-          'Asia/Kolkata'
-        ).toDate();
-
+        
         // Check for existing task to avoid duplicates
         const existingTask = await models.Task.findOne({
           where: {
             childId: task.childId,
             taskTemplateId: task.taskTemplateId,
-            dueDate: nextDueDateTime,
+            dueDate: {
+              [Op.gte]: moment(nextDueDate).startOf('day').toDate(),
+              [Op.lt]: moment(nextDueDate).add(1, 'day').startOf('day').toDate()
+            }
           },
           transaction: t,
         });
@@ -103,14 +122,13 @@ const scheduleTaskStatusAndRecurrence = () => {
               taskTemplateId: task.taskTemplateId,
               parentId: task.parentId,
               childId: task.childId,
-              dueDate: nextDueDateTime,
+              dueDate: nextDueDate,
               dueTime: task.dueTime,
-              duration: task.duration,
+              description: task.description,
               recurrence: task.recurrence,
               rewardCoins: task.rewardCoins,
-              difficulty: task.difficulty,
               isRecurring: true,
-              status: moment(nextDueDateTime).tz('Asia/Kolkata').isSame(today, 'day') ? 'PENDING' : 'UPCOMING',
+              status: moment(nextDueDate).tz('Asia/Kolkata').isSame(today, 'day') ? 'PENDING' : 'UPCOMING',
               notificationEnabled: task.notificationEnabled,
             },
             { transaction: t }
@@ -120,7 +138,7 @@ const scheduleTaskStatusAndRecurrence = () => {
             await models.Notification.create(
               {
                 type: "task_reminder",
-                message: `New recurring task "${task.TaskTemplate.title}" assigned for ${moment(nextDueDateTime).format('DD-MM-YYYY')}.`,
+                message: `New recurring task "${task.TaskTemplate.title}" assigned for ${moment(nextDueDate).format('DD-MM-YYYY')}.`,
                 recipientType: "child",
                 recipientId: task.childId,
                 relatedItemType: "task",

@@ -15,7 +15,7 @@ const asyncHandler = require("../Utils/asyncHandler");
 
 //---------------------Create a new task template (Both Parent and Admin)------------------------------------
 const createTaskTemplate = asyncHandler(async (req, res, next) => {
-  const { title, description } = req.body;
+  const { title } = req.body;
 
   try {
     // Validate title
@@ -64,7 +64,6 @@ const createTaskTemplate = asyncHandler(async (req, res, next) => {
     // Prepare data based on user type
     let taskTemplateData = {
       title: trimmedTitle,
-      description,
       image: imageData,
     };
 
@@ -88,7 +87,6 @@ const createTaskTemplate = asyncHandler(async (req, res, next) => {
       data: {
         id: taskTemplate.id,
         title: taskTemplate.title,
-        description: taskTemplate.description,
         image: taskTemplate.image,
         userId: taskTemplate.userId,
         adminId: taskTemplate.adminId,
@@ -225,7 +223,7 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
       return next(new ErrorHandler("Invalid user type", 400));
     }
 
-    // Add search filter
+    // Add search filter - Updated to only search title since description is removed
     if (search && search.trim()) {
       const searchTerm = search.trim();
 
@@ -250,10 +248,7 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
         [Op.and]: [
           whereCondition,
           {
-            [Op.or]: [
-              { title: { [Op.iLike]: `%${searchTerm}%` } },
-              { description: { [Op.iLike]: `%${searchTerm}%` } },
-            ],
+            title: { [Op.iLike]: `%${searchTerm}%` },
           },
         ],
       };
@@ -277,7 +272,6 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
         attributes: [
           "id",
           "title",
-          "description",
           "image",
           "userId",
           "adminId",
@@ -348,7 +342,7 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
   }
 });
 
-//-------------------- Get tasks by task template ID=-----------------------------------------
+//-------------------- Get tasks by task template ID-----------------------------------------
 const getTasksByTemplateId = asyncHandler(async (req, res, next) => {
   try {
     // Determine user type and ID
@@ -361,7 +355,6 @@ const getTasksByTemplateId = asyncHandler(async (req, res, next) => {
     const { taskTemplateId } = req.params;
     const {
       status,
-      difficulty,
       dueDateFrom,
       dueDateTo,
       childId,
@@ -407,7 +400,7 @@ const getTasksByTemplateId = asyncHandler(async (req, res, next) => {
 
     // Validate task template existence and access
     const taskTemplate = await models.TaskTemplate.findByPk(taskTemplateId, {
-      attributes: ["id", "title", "description", "image", "userId", "adminId"],
+      attributes: ["id", "title", "image", "userId", "adminId"],
     });
 
     if (!taskTemplate) {
@@ -442,7 +435,7 @@ const getTasksByTemplateId = asyncHandler(async (req, res, next) => {
     const taskInclude = [
       {
         model: models.TaskTemplate,
-        attributes: ["id", "title", "description", "image"],
+        attributes: ["id", "title", "image"],
       },
       {
         model: models.Child,
@@ -451,12 +444,9 @@ const getTasksByTemplateId = asyncHandler(async (req, res, next) => {
       },
     ];
 
-    // Apply filters
+    // Apply filters - Removed difficulty filter since it's not in the model anymore
     if (status && status !== "ALL") {
       where.status = status;
-    }
-    if (difficulty) {
-      where.difficulty = difficulty;
     }
 
     // Handle date filters based on historyFilter
@@ -521,20 +511,16 @@ const getTasksByTemplateId = asyncHandler(async (req, res, next) => {
       order: [["dueDate", historyFilter === "UPCOMING" ? "ASC" : "DESC"]],
     });
 
-    // Format response to match the UI
+    // Format response to match the UI - Removed difficulty and duration fields
     const formattedTasks = tasks.map((task) => ({
       id: task.id,
       dueDate: moment(task.dueDate).tz("Asia/Kolkata").format("DD MMM YYYY"),
       dueTime: task.dueTime,
       status: task.status,
       taskTemplateId: task.taskTemplateId,
-      // title: task.TaskTemplate?.title,
-      // description: task.TaskTemplate?.description,
-      // image: task.TaskTemplate?.image,
-      difficulty: task.difficulty,
+      description: task.description,
       rewardCoins: task.rewardCoins,
       recurrence: task.recurrence,
-      duration: task.duration,
       childId: task.childId,
       childName: task.Child?.name,
       ...(userType === "parent" && {
@@ -552,7 +538,6 @@ const getTasksByTemplateId = asyncHandler(async (req, res, next) => {
         taskTemplate: {
           id: taskTemplate.id,
           title: taskTemplate.title,
-          description: taskTemplate.description,
           image: taskTemplate.image,
         },
         tasks: formattedTasks,
@@ -564,7 +549,6 @@ const getTasksByTemplateId = asyncHandler(async (req, res, next) => {
         },
         appliedFilters: {
           status: status || "ALL",
-          difficulty: difficulty || "ALL",
           dueDateFrom: dueDateFrom || null,
           dueDateTo: dueDateTo || null,
           childId: childId || (userType === "parent" ? "ALL_CHILDREN" : userId),
@@ -586,12 +570,9 @@ const createTask = asyncHandler(async (req, res, next) => {
     taskTemplateId,
     childId,
     dueTime, // Format: HH:MM
-    duration,
     recurrence,
     recurrenceDates, // Array of dates in DD-MM-YYYY format
-    rewardCoins,
-    difficulty,
-    notificationEnabled,
+    description, // Now part of individual task instead of template
   } = req.body;
   const parentId = req.parent.id;
 
@@ -636,32 +617,18 @@ const createTask = asyncHandler(async (req, res, next) => {
       );
     }
 
-    // Validate duration
-    if (duration !== undefined) {
-      const parsedDuration =
-        typeof duration === "string" ? parseInt(duration, 10) : duration;
-      if (isNaN(parsedDuration) || parsedDuration < 1) {
-        return next(
-          new ErrorHandler("Duration must be a positive number in minutes", 400)
-        );
-      }
+    // Validate description if provided
+    if (description && typeof description !== "string") {
+      return next(new ErrorHandler("Description must be a string", 400));
+    }
+    if (description && description.trim().length > 1000) {
+      return next(
+        new ErrorHandler("Description cannot exceed 1000 characters", 400)
+      );
     }
 
-    // Validate and set rewardCoins
-    let finalReward;
-    if (rewardCoins === undefined || rewardCoins === null) {
-      finalReward = calculateDefaultReward(
-        taskTemplate.title,
-        difficulty || "EASY"
-      );
-    } else {
-      finalReward = Number(rewardCoins);
-      if (isNaN(finalReward) || finalReward < 0) {
-        return next(
-          new ErrorHandler("Reward coins must be a non-negative number", 400)
-        );
-      }
-    }
+    // Hardcoded reward coins
+    const finalReward = 10;
 
     // Handle recurrenceDates
     let validDates = [];
@@ -686,11 +653,6 @@ const createTask = asyncHandler(async (req, res, next) => {
         );
       }
     } else if (recurrence === "WEEKLY") {
-      // if (uniqueDates.length < 7) {
-      //   return next(
-      //     new ErrorHandler('WEEKLY recurrence requires at least 7 dates', 400)
-      //   );
-      // }
       if (uniqueDates.length > 7) {
         return next(
           new ErrorHandler(
@@ -716,11 +678,6 @@ const createTask = asyncHandler(async (req, res, next) => {
         );
       }
       const daysInMonth = firstDate.daysInMonth();
-      // if (uniqueDates.length < daysInMonth) {
-      //   return next(
-      //     new ErrorHandler(`MONTHLY recurrence requires at least ${daysInMonth} dates for the specified month`, 400)
-      //   );
-      // }
       if (uniqueDates.length > daysInMonth) {
         return next(
           new ErrorHandler(
@@ -744,12 +701,7 @@ const createTask = asyncHandler(async (req, res, next) => {
       if (!parsedDate.isValid()) {
         return next(new ErrorHandler(`Invalid date: ${date}`, 400));
       }
-      // Block past dates for all recurrences
-//      if (parsedDate.isBefore(today)) {
-  //      return next(
-    //      new ErrorHandler(`Past date ${date} is not allowed in recurrenceDates`, 400)
-      //  );
-     // }
+
       // For MONTHLY, ensure all dates are in the same month
       if (recurrence === "MONTHLY") {
         const firstDate = moment.tz(
@@ -800,11 +752,33 @@ const createTask = asyncHandler(async (req, res, next) => {
         if (existingTask) {
           continue; // Skip duplicate date
         }
+
         // Determine task status based on date
         const taskDate = moment.tz(date, "DD-MM-YYYY", "Asia/Kolkata");
-        const status = taskDate.isSame(today, "day") ? "PENDING" : "UPCOMING";
 
-        // Create task
+        let status;
+        if (taskDate.isBefore(today, "day")) {
+          // Past date - set as PENDING (overdue)
+          status = "PENDING";
+        } else if (taskDate.isSame(today, "day")) {
+          // Today's date - set as PENDING
+          status = "PENDING";
+        } else {
+          // Future date - set as UPCOMING
+          status = "UPCOMING";
+        }
+
+        // Alternative: If you want to prevent past dates entirely, add this validation:
+        // if (taskDate.isBefore(today, "day")) {
+        //   return next(
+        //     new ErrorHandler(
+        //       `Cannot create task for past date: ${date}. Please use current or future dates only.`,
+        //       400
+        //     )
+        //   );
+        // }
+
+        // Create task - Removed duration and difficulty fields
         const task = await models.Task.create(
           {
             taskTemplateId,
@@ -812,38 +786,36 @@ const createTask = asyncHandler(async (req, res, next) => {
             childId,
             dueDate: dueDateTime,
             dueTime: dueTime || "00:00",
-            duration,
+            description: description?.trim() || null,
             recurrence,
             rewardCoins: finalReward,
-            difficulty: difficulty || "EASY",
             isRecurring,
             status,
-            notificationEnabled: notificationEnabled || false,
           },
           { transaction: t }
         );
-        // Create notification if enabled
-        if (notificationEnabled) {
-          await models.Notification.create(
-            {
-              relatedItemId: task.id,
-              relatedItemType: "task",
-              recipientId: childId,
-              recipientType: "child",
-              message: `New task "${taskTemplate.title}" assigned for ${moment(
-                dueDateTime
-              ).format("DD-MM-YYYY HH:mm")}`,
-              type: "task_reminder",
-            },
-            { transaction: t }
-          );
-        }
+
+        // Create notification
+        await models.Notification.create(
+          {
+            relatedItemId: task.id,
+            relatedItemType: "task",
+            recipientId: childId,
+            recipientType: "child",
+            message: `New task "${taskTemplate.title}" assigned for ${moment(
+              dueDateTime
+            ).format("DD-MM-YYYY HH:mm")}`,
+            type: "task_reminder",
+          },
+          { transaction: t }
+        );
 
         createdTasks.push({
           id: task.id,
           dueDate: task.dueDate,
           dueTime: task.dueTime,
           status: task.status,
+          description: task.description,
         });
       }
 
@@ -864,7 +836,6 @@ const createTask = asyncHandler(async (req, res, next) => {
         data: {
           taskTemplateId,
           title: taskTemplate.title,
-          description: taskTemplate.description,
           image: taskTemplate.image,
           tasks: createdTasks,
         },
@@ -894,7 +865,7 @@ const listTasks = asyncHandler(async (req, res, next) => {
     console.log(userId);
 
     // Extract query parameters for filtering
-    const { status, difficulty, dueDateFrom, dueDateTo, childId } = req.query;
+    const { status, dueDateFrom, dueDateTo, childId } = req.query;
 
     // Validate query parameters
     const {
@@ -914,7 +885,7 @@ const listTasks = asyncHandler(async (req, res, next) => {
     const taskInclude = [
       {
         model: models.TaskTemplate,
-        attributes: ["id", "title", "description", "image"],
+        attributes: ["id", "title", "image"],
       },
     ];
 
@@ -924,7 +895,6 @@ const listTasks = asyncHandler(async (req, res, next) => {
     }
     // If status is 'ALL' or not provided, don't filter by status
 
-    if (difficulty) where.difficulty = difficulty;
     if (dueDateFrom || dueDateTo) {
       where.dueDate = {};
       if (dueDateFrom) where.dueDate[Op.gte] = new Date(dueDateFrom);
@@ -988,9 +958,8 @@ const listTasks = asyncHandler(async (req, res, next) => {
       status: task.status,
       taskTemplateId: task.taskTemplateId,
       title: task.TaskTemplate?.title,
-      description: task.TaskTemplate?.description,
       image: task.TaskTemplate?.image,
-      difficulty: task.difficulty,
+      description: task.description, // Now from Task model
       rewardCoins: task.rewardCoins,
       recurrence: task.recurrence,
       // Include additional fields for parents only
@@ -1017,7 +986,6 @@ const listTasks = asyncHandler(async (req, res, next) => {
         // Add filter summary for better understanding
         appliedFilters: {
           status: status || "ALL",
-          difficulty: difficulty || "ALL",
           dueDateFrom: dueDateFrom || null,
           dueDateTo: dueDateTo || null,
           childId: childId || (userType === "parent" ? "ALL_CHILDREN" : userId),
@@ -1040,13 +1008,13 @@ const listTasks = asyncHandler(async (req, res, next) => {
 const getTaskWithTemplateDetails = asyncHandler(async (req, res, next) => {
   try {
     const { taskId } = req.params;
-    
+
     // Get user type and ID from auth middleware
     const userType = req.userType; // This comes from your auth middleware
     const userId = req.parent?.id || req.admin?.id;
-    
+
     console.log("userType :", userType, "userId:", userId, "taskId:", taskId);
-    
+
     // Validate user authentication
     if (!userType || !userId) {
       return next(new ErrorHandler("Invalid authentication token", 401));
@@ -1054,7 +1022,9 @@ const getTaskWithTemplateDetails = asyncHandler(async (req, res, next) => {
 
     // Validate taskId
     if (!isValidUUID(taskId)) {
-      return next(new ErrorHandler("Invalid taskId. Must be a valid UUID", 400));
+      return next(
+        new ErrorHandler("Invalid taskId. Must be a valid UUID", 400)
+      );
     }
 
     // Fetch task with all related data
@@ -1062,7 +1032,15 @@ const getTaskWithTemplateDetails = asyncHandler(async (req, res, next) => {
       include: [
         {
           model: models.TaskTemplate,
-          attributes: ["id", "title", "description", "image", "userId", "adminId", "createdAt", "updatedAt"],
+          attributes: [
+            "id",
+            "title",
+            "image",
+            "userId",
+            "adminId",
+            "createdAt",
+            "updatedAt",
+          ],
           include: [
             {
               model: models.Parent,
@@ -1071,7 +1049,7 @@ const getTaskWithTemplateDetails = asyncHandler(async (req, res, next) => {
             },
             {
               model: models.Admin,
-              attributes: ["id",  "email"],
+              attributes: ["id", "email"],
               required: false,
             },
           ],
@@ -1079,7 +1057,7 @@ const getTaskWithTemplateDetails = asyncHandler(async (req, res, next) => {
         {
           model: models.Child,
           as: "Child",
-          attributes: ["id",  "parentId"],
+          attributes: ["id", "parentId"],
           include: [
             {
               model: models.Parent,
@@ -1108,9 +1086,11 @@ const getTaskWithTemplateDetails = asyncHandler(async (req, res, next) => {
       // 2. Tasks created by them
       const isParentTask = task.parentId === userId;
       const isChildOfParent = task.Child && task.Child.parentId === userId;
-      
+
       if (!isParentTask && !isChildOfParent) {
-        return next(new ErrorHandler("Not authorized to access this task", 403));
+        return next(
+          new ErrorHandler("Not authorized to access this task", 403)
+        );
       }
 
       // Additional validation for template access
@@ -1121,15 +1101,19 @@ const getTaskWithTemplateDetails = asyncHandler(async (req, res, next) => {
         // 2. Templates created by admin (adminId exists, userId is null)
         const isOwnTemplate = template.userId === userId;
         const isAdminTemplate = template.adminId && !template.userId;
-        
+
         if (!isOwnTemplate && !isAdminTemplate) {
-          return next(new ErrorHandler("Not authorized to access this task template", 403));
+          return next(
+            new ErrorHandler("Not authorized to access this task template", 403)
+          );
         }
       }
     } else if (userType === "child") {
       // Child can only access their own tasks
       if (task.childId !== userId) {
-        return next(new ErrorHandler("Not authorized to access this task", 403));
+        return next(
+          new ErrorHandler("Not authorized to access this task", 403)
+        );
       }
     }
 
@@ -1138,11 +1122,10 @@ const getTaskWithTemplateDetails = asyncHandler(async (req, res, next) => {
       id: task.id,
       dueDate: task.dueDate,
       dueTime: task.dueTime,
-      duration: task.duration,
+      description: task.description, // Now from Task model
       recurrence: task.recurrence,
       status: task.status,
       rewardCoins: task.rewardCoins,
-      difficulty: task.difficulty,
       isRecurring: task.isRecurring,
       completedAt: task.completedAt,
       approvedAt: task.approvedAt,
@@ -1151,47 +1134,44 @@ const getTaskWithTemplateDetails = asyncHandler(async (req, res, next) => {
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
       // Child information
-      child: task.Child ? {
-        id: task.Child.id,
-        name: task.Child.name,
-        parentId: task.Child.parentId,
-        // parent: task.Child.Parent ? {
-        //   id: task.Child.Parent.id,
-        //   // name: `${task.Child.Parent.firstName || ""} ${task.Child.Parent.lastName || ""}`.trim(),
-        //   email: task.Child.Parent.email,
-        // } : null,
-      } : null,
+      child: task.Child
+        ? {
+            id: task.Child.id,
+            name: task.Child.name,
+            parentId: task.Child.parentId,
+          }
+        : null,
       // Task creator (parent) information
-      taskCreator: task.Parent ? {
-        id: task.Parent.id,
-        // name: `${task.Parent.firstName || ""} ${task.Parent.lastName || ""}`.trim(),
-        email: task.Parent.email,
-      } : null,
+      taskCreator: task.Parent
+        ? {
+            id: task.Parent.id,
+            email: task.Parent.email,
+          }
+        : null,
     };
 
-    // Template information
-    const templateData = task.TaskTemplate ? {
-      id: task.TaskTemplate.id,
-      title: task.TaskTemplate.title,
-      description: task.TaskTemplate.description,
-      image: task.TaskTemplate.image,
-      createdAt: task.TaskTemplate.createdAt,
-      updatedAt: task.TaskTemplate.updatedAt,
-      createdBy: task.TaskTemplate.userId ? "parent" : "admin",
-      creator: task.TaskTemplate.userId 
-        ? {
-            id: task.TaskTemplate.Parent?.id,
-            // name: `${task.TaskTemplate.Parent?.firstName || ""} ${task.TaskTemplate.Parent?.lastName || ""}`.trim(),
-            email: task.TaskTemplate.Parent?.email,
-            type: "parent",
-          }
-        : {
-            id: task.TaskTemplate.Admin?.id,
-            // name: `${task.TaskTemplate.Admin?.firstName || ""} ${task.TaskTemplate.Admin?.lastName || ""}`.trim(),
-            email: task.TaskTemplate.Admin?.email,
-            type: "admin",
-          },
-    } : null;
+    // Template information (removed description as it's no longer in TaskTemplate)
+    const templateData = task.TaskTemplate
+      ? {
+          id: task.TaskTemplate.id,
+          title: task.TaskTemplate.title,
+          image: task.TaskTemplate.image,
+          createdAt: task.TaskTemplate.createdAt,
+          updatedAt: task.TaskTemplate.updatedAt,
+          createdBy: task.TaskTemplate.userId ? "parent" : "admin",
+          creator: task.TaskTemplate.userId
+            ? {
+                id: task.TaskTemplate.Parent?.id,
+                email: task.TaskTemplate.Parent?.email,
+                type: "parent",
+              }
+            : {
+                id: task.TaskTemplate.Admin?.id,
+                email: task.TaskTemplate.Admin?.email,
+                type: "admin",
+              },
+        }
+      : null;
 
     return res.status(200).json({
       success: true,
@@ -1208,6 +1188,1043 @@ const getTaskWithTemplateDetails = asyncHandler(async (req, res, next) => {
     );
   }
 });
+
+// -----------------update task and task template------------------------------------
+const updateTaskTemplateAndTasks = asyncHandler(async (req, res, next) => {
+  // Parse form-data
+  const {
+    name,
+    recurringDates,
+    childId,
+    dueTime,
+    recurrence,
+    status,
+    description, // Now for Task model instead of TaskTemplate
+  } = req.body;
+  const userType = req.userType;
+  const userId = req.parent?.id || req.admin?.id;
+  const taskTemplateId = req.params.taskTemplateId;
+
+  // Parse JSON fields if they come as strings (common in form-data)
+  const parsedRecurringDates = recurringDates
+    ? typeof recurringDates === "string"
+      ? JSON.parse(recurringDates)
+      : recurringDates
+    : [];
+
+  if (!userType || !userId) {
+    return next(new ErrorHandler("Invalid authentication token", 401));
+  }
+
+  // Validate task update fields if any are provided
+  const taskUpdates = {};
+  if (dueTime) {
+    if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(dueTime)) {
+      return next(
+        new ErrorHandler(
+          "Invalid dueTime format. Expected HH:MM (24-hour)",
+          400
+        )
+      );
+    }
+    taskUpdates.dueTime = dueTime;
+  }
+
+  if (recurrence) {
+    const allowedRecurrences = ["ONCE", "DAILY", "WEEKLY", "MONTHLY"];
+    if (!allowedRecurrences.includes(recurrence)) {
+      return next(
+        new ErrorHandler(
+          "Invalid recurrence. Allowed: ONCE, DAILY, WEEKLY, MONTHLY",
+          400
+        )
+      );
+    }
+    taskUpdates.recurrence = recurrence;
+    taskUpdates.isRecurring = recurrence !== "ONCE";
+  }
+  if (status) {
+    if (status !== "UPCOMING") {
+      return next(new ErrorHandler("Can only update to UPCOMING status", 400));
+    }
+    taskUpdates.status = status;
+  }
+
+  // Hardcoded reward coins - always set to 10
+  taskUpdates.rewardCoins = 10;
+
+  // Add description to task updates if provided
+  if (description !== undefined) {
+    taskUpdates.description = description || null;
+  }
+
+  // If task updates are provided, childId is required
+  if (Object.keys(taskUpdates).length > 0 && !childId) {
+    return next(
+      new ErrorHandler("childId is required when updating task fields", 400)
+    );
+  }
+
+  // If recurringDates is provided, childId is required
+  if (parsedRecurringDates.length > 0 && !childId) {
+    return next(
+      new ErrorHandler("childId is required when providing recurringDates", 400)
+    );
+  }
+
+  const t = await models.db.sequelize.transaction();
+
+  try {
+    // Fetch task template with creator information
+    const taskTemplate = await models.TaskTemplate.findByPk(taskTemplateId, {
+      include: [
+        { model: models.Parent, attributes: ["id"], required: false },
+        { model: models.Admin, attributes: ["id"], required: false },
+      ],
+      transaction: t,
+    });
+    console.log("taskTemplate:", taskTemplate);
+
+    if (!taskTemplate) {
+      await t.rollback();
+      return next(new ErrorHandler("Task template not found", 404));
+    }
+
+    // Updated Authorization checks
+    if (userType === "parent") {
+      // Parents can access both their own templates AND admin-created templates
+      // But they can only MODIFY their own templates
+      const isParentTemplate =
+        taskTemplate.userId && taskTemplate.userId === userId;
+      const isAdminTemplate =
+        taskTemplate.adminId && taskTemplate.adminId !== null;
+
+      // Parents can access the template if it's theirs or created by admin
+      if (!isParentTemplate && !isAdminTemplate) {
+        await t.rollback();
+        return next(
+          new ErrorHandler("Template not found or not accessible", 404)
+        );
+      }
+
+      // Check if parent is trying to modify template details (name, image)
+      const isModifyingTemplate = name || req.file;
+      if (isModifyingTemplate && !isParentTemplate) {
+        await t.rollback();
+        return next(
+          new ErrorHandler("Parents cannot modify admin-created templates", 403)
+        );
+      }
+    } else if (userType === "admin") {
+      // Admins can only modify their own templates
+      if (taskTemplate.userId && taskTemplate.userId !== null) {
+        await t.rollback();
+        return next(
+          new ErrorHandler("Admins cannot modify parent-created templates", 403)
+        );
+      }
+      if (taskTemplate.adminId !== userId) {
+        await t.rollback();
+        return next(
+          new ErrorHandler("Not authorized to modify this template", 403)
+        );
+      }
+    } else {
+      await t.rollback();
+      return next(new ErrorHandler("Invalid user type", 403));
+    }
+
+    // Validate and update TaskTemplate (only if user has permission to modify)
+    const templateUpdates = {};
+    const canModifyTemplate =
+      (userType === "parent" && taskTemplate.userId === userId) ||
+      (userType === "admin" && taskTemplate.adminId === userId);
+
+    if (canModifyTemplate) {
+      if (name) {
+        const trimmedName = name.trim();
+        if (
+          !trimmedName ||
+          /^\d+$/.test(trimmedName) ||
+          /^[^a-zA-Z0-9]+$/.test(trimmedName)
+        ) {
+          await t.rollback();
+          return next(
+            new ErrorHandler(
+              "Invalid name. Must contain letters and not be empty or special characters only",
+              400
+            )
+          );
+        }
+        templateUpdates.title = trimmedName;
+      }
+
+      // Handle image upload
+      if (req.file) {
+        try {
+          const uploadResult = await uploadFile(req.file);
+          templateUpdates.image = {
+            url: uploadResult.url,
+            filename: uploadResult.filename,
+            originalName: uploadResult.originalName,
+            size: uploadResult.size,
+            mimetype: uploadResult.mimetype,
+          };
+
+          // Delete old image if it exists
+          if (taskTemplate.image && taskTemplate.image.filename) {
+            await deleteFile(taskTemplate.image.filename);
+          }
+        } catch (uploadError) {
+          await t.rollback();
+          console.error("Image upload error:", uploadError);
+          return next(new ErrorHandler("Failed to upload image", 500));
+        }
+      }
+
+      // Update TaskTemplate if there are changes
+      if (Object.keys(templateUpdates).length > 0) {
+        await taskTemplate.update(templateUpdates, { transaction: t });
+      }
+    }
+
+    // Validate child
+    if (childId) {
+      if (!isValidUUID(childId)) {
+        await t.rollback();
+        return next(
+          new ErrorHandler("Invalid childId. Must be a valid UUID", 400)
+        );
+      }
+      const child = await models.Child.findOne({
+        where: {
+          id: childId,
+          parentId: userType === "parent" ? userId : { [Op.ne]: null },
+        },
+        transaction: t,
+      });
+      if (!child) {
+        await t.rollback();
+        return next(
+          new ErrorHandler(
+            "Child not found or not associated with this parent",
+            404
+          )
+        );
+      }
+    }
+
+    // Process recurringDates
+    let validDates = [];
+    if (parsedRecurringDates.length > 0) {
+      const uniqueDates = [...new Set(parsedRecurringDates)];
+      for (const date of uniqueDates) {
+        if (!/^\d{2}-\d{2}-\d{4}$/.test(date)) {
+          await t.rollback();
+          return next(
+            new ErrorHandler(
+              `Invalid date format: ${date}. Expected DD-MM-YYYY`,
+              400
+            )
+          );
+        }
+        const parsedDate = moment.tz(date, "DD-MM-YYYY", "Asia/Kolkata");
+        if (!parsedDate.isValid()) {
+          await t.rollback();
+          return next(new ErrorHandler(`Invalid date: ${date}`, 400));
+        }
+        validDates.push(date);
+      }
+      validDates = sortRecurrenceDates(validDates);
+    }
+
+    // FIXED: Fetch ALL existing tasks for the template/child, not just UPCOMING ones
+    const allExistingTasks = await models.Task.findAll({
+      where: {
+        taskTemplateId,
+        ...(childId && { childId }),
+      },
+      transaction: t,
+    });
+
+    // Separate tasks by status
+    const upcomingTasks = allExistingTasks.filter(
+      (task) => task.status === "UPCOMING"
+    );
+    const nonUpcomingTasks = allExistingTasks.filter(
+      (task) => task.status !== "UPCOMING"
+    );
+
+    // Get dates that already have non-upcoming tasks (these should be skipped)
+    const nonUpcomingTaskDates = nonUpcomingTasks.map((task) =>
+      moment(task.dueDate).tz("Asia/Kolkata").format("DD-MM-YYYY")
+    );
+
+    // Update or create tasks for recurringDates
+    if (validDates.length > 0 && childId) {
+      for (const date of validDates) {
+        // FIXED: Skip if this date already has a task with non-upcoming status
+        if (nonUpcomingTaskDates.includes(date)) {
+          console.log(
+            `Skipping date ${date} - already has task with status other than UPCOMING`
+          );
+          continue;
+        }
+
+        const dueDateTime = moment
+          .tz(
+            `${date} ${taskUpdates.dueTime || "00:00"}:00`,
+            "DD-MM-YYYY HH:mm:ss",
+            "Asia/Kolkata"
+          )
+          .toDate();
+
+        // Find existing UPCOMING task for this date
+        const existingUpcomingTask = upcomingTasks.find(
+          (t) =>
+            moment(t.dueDate).tz("Asia/Kolkata").format("DD-MM-YYYY") === date
+        );
+
+        if (existingUpcomingTask) {
+          // Update existing UPCOMING task
+          if (Object.keys(taskUpdates).length > 0) {
+            await existingUpcomingTask.update(taskUpdates, { transaction: t });
+          }
+        } else {
+          // Create new task only if no task exists for this date
+          await models.Task.create(
+            {
+              id: uuidv4(),
+              taskTemplateId,
+              parentId: userType === "parent" ? userId : null,
+              childId,
+              dueDate: dueDateTime,
+              dueTime: taskUpdates.dueTime || "00:00",
+              description: taskUpdates.description || null,
+              recurrence: taskUpdates.recurrence || "ONCE",
+              rewardCoins: 10, // Hardcoded reward coins
+              isRecurring: taskUpdates.isRecurring || false,
+              status: "UPCOMING",
+            },
+            { transaction: t }
+          );
+        }
+      }
+    }
+
+    // FIXED: Delete only UPCOMING tasks that are not in validDates and don't have non-upcoming status
+    for (const task of upcomingTasks) {
+      const taskDate = moment(task.dueDate)
+        .tz("Asia/Kolkata")
+        .format("DD-MM-YYYY");
+      if (!validDates.includes(taskDate)) {
+        await task.destroy({ transaction: t });
+      }
+    }
+
+    await t.commit();
+
+    // Fetch updated template for response
+    const updatedTemplate = await models.TaskTemplate.findByPk(taskTemplateId, {
+      attributes: ["id", "title", "image"],
+      include: [
+        {
+          model: models.Task,
+          attributes: [
+            "id",
+            "dueDate",
+            "dueTime",
+            "status",
+            "rewardCoins",
+            "recurrence",
+            "description",
+          ],
+          where: { ...(childId && { childId }) },
+        },
+      ],
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Task template and tasks updated successfully",
+      data: {
+        taskTemplate: {
+          id: updatedTemplate.id,
+          title: updatedTemplate.title,
+          image: updatedTemplate.image,
+          tasks: updatedTemplate.Tasks.map((task) => ({
+            id: task.id,
+            dueDate: moment(task.dueDate)
+              .tz("Asia/Kolkata")
+              .format("DD-MM-YYYY"),
+            dueTime: task.dueTime,
+            status: task.status,
+            rewardCoins: task.rewardCoins,
+            recurrence: task.recurrence,
+            description: task.description,
+          })),
+        },
+      },
+    });
+  } catch (error) {
+    await t.rollback();
+    console.error("Error updating task template and tasks:", error);
+    return next(
+      new ErrorHandler(
+        error.message || "Failed to update task template and tasks",
+        500
+      )
+    );
+  }
+});
+//----------------Mark task as completed (Child only)-------------------------
+const updateTaskStatus = asyncHandler(async (req, res, next) => {
+  const { taskId } = req.params;
+  const { status, reason } = req.body;
+  // console.log(req.parent);
+  console.log(req.child);
+
+  const userType = req.parent?.obj?.id
+    ? "parent"
+    : req.child?.obj?.id
+    ? "child"
+    : null;
+  const userId = req.parent?.obj?.id || req.child?.obj?.id;
+
+  try {
+    // Validate status
+    const allowedStatuses = ["COMPLETED", "APPROVED", "REJECTED"];
+    if (!allowedStatuses.includes(status)) {
+      return next(
+        new ErrorHandler(
+          "Invalid status. Allowed values: COMPLETED, APPROVED, REJECTED",
+          400
+        )
+      );
+    }
+
+    // Validate user
+    if (!userType || !userId) {
+      return next(new ErrorHandler("Invalid authentication token", 401));
+    }
+
+    // Find task
+    const taskQuery = {
+      where: { id: taskId },
+      include: [
+        {
+          model: models.TaskTemplate,
+          attributes: ["id", "title", "image"],
+        },
+        { model: models.Child, attributes: ["id", "name"] },
+      ],
+    };
+    if (userType === "child") taskQuery.where.childId = userId;
+    else taskQuery.where.parentId = userId;
+
+    const task = await models.Task.findOne(taskQuery);
+    if (!task) {
+      return next(new ErrorHandler("Task not found or not accessible", 404));
+    }
+    console.log(task);
+
+    // Store template and child data before any updates
+    const taskTemplateTitle = task.TaskTemplate?.title;
+    const childName = task.Child?.name;
+
+    const t = await sequelize.transaction();
+    try {
+      // Mark related notifications as read for the current user
+      await models.Notification.update(
+        { isRead: true },
+        {
+          where: {
+            relatedItemType: "task",
+            relatedItemId: taskId,
+            recipientType: userType,
+            recipientId: userId,
+            isRead: false,
+          },
+          transaction: t,
+        }
+      );
+
+      if (status === "COMPLETED") {
+        // Child marking task as completed
+        if (userType !== "child") {
+          return next(
+            new ErrorHandler("Only children can mark tasks as completed", 403)
+          );
+        }
+        if (task.status !== "PENDING") {
+          return next(new ErrorHandler(`Task is already ${task.status}`, 400));
+        }
+
+        await task.update(
+          { status: "COMPLETED", completedAt: new Date() },
+          { transaction: t }
+        );
+
+        // Notify parent
+        await models.Notification.create(
+          {
+            type: "task_completion",
+            message: `Task '${taskTemplateTitle}' marked as completed by ${childName} and waiting for approval`,
+            recipientType: "parent",
+            recipientId: task.parentId,
+            relatedItemType: "task",
+            relatedItemId: task.id,
+          },
+          { transaction: t }
+        );
+      } else if (status === "APPROVED") {
+        // Parent approving task
+        if (userType !== "parent") {
+          return next(new ErrorHandler("Only parents can approve tasks", 403));
+        }
+        if (task.status !== "COMPLETED") {
+          return next(
+            new ErrorHandler("Task must be completed to approve", 400)
+          );
+        }
+
+        await task.update(
+          { status: "APPROVED", approvedAt: new Date() },
+          { transaction: t }
+        );
+
+        // Award coins
+        await models.Transaction.create(
+          {
+            childId: task.childId,
+            taskId: task.id,
+            amount: task.rewardCoins,
+            type: "credit",
+            description: `Reward for completing task: ${taskTemplateTitle}`,
+          },
+          { transaction: t }
+        );
+
+        // Update streak
+        const streak = await models.Streak.findOne({
+          where: { childId: task.childId },
+          transaction: t,
+        });
+        const today = moment().tz("Asia/Kolkata").startOf("day");
+        if (streak) {
+          const lastStreakDate = streak.lastTaskDate
+            ? moment(streak.lastTaskDate).tz("Asia/Kolkata").startOf("day")
+            : null;
+          const streakCount =
+            lastStreakDate && today.diff(lastStreakDate, "days") === 1
+              ? streak.streakCount + 1
+              : 1;
+
+          await streak.update(
+            { streakCount, lastTaskDate: today.toDate() },
+            { transaction: t }
+          );
+
+          if (streakCount === 7) {
+            await models.Transaction.create(
+              {
+                childId: task.childId,
+                amount: 50,
+                type: "streak_bonus",
+                description: "Streak bonus for 7 consecutive days",
+              },
+              { transaction: t }
+            );
+            await streak.update({ streakCount: 0 }, { transaction: t });
+            await models.Notification.create(
+              {
+                type: "streak_bonus",
+                message:
+                  "Congratulations! You earned a 50-coin bonus for a 7-day streak!",
+                recipientType: "child",
+                recipientId: task.childId,
+                relatedItemType: "task",
+                relatedItemId: task.id,
+              },
+              { transaction: t }
+            );
+          }
+        } else {
+          await models.Streak.create(
+            {
+              childId: task.childId,
+              streakCount: 1,
+              lastTaskDate: today.toDate(),
+            },
+            { transaction: t }
+          );
+        }
+
+        // Create next instance for daily recurring tasks
+        if (task.isRecurring && task.recurrence === "DAILY") {
+          const nextDueDate = moment(task.dueDate)
+            .tz("Asia/Kolkata")
+            .add(1, "day")
+            .toDate();
+          const nextDueDateTime = moment
+            .tz(
+              `${nextDueDate.getFullYear()}-${
+                nextDueDate.getMonth() + 1
+              }-${nextDueDate.getDate()} ${task.dueTime}:00`,
+              "YYYY-MM-DD HH:mm:ss",
+              "Asia/Kolkata"
+            )
+            .toDate();
+
+          const existingTask = await models.Task.findOne({
+            where: {
+              childId: task.childId,
+              taskTemplateId: task.taskTemplateId,
+              dueDate: nextDueDateTime,
+            },
+            transaction: t,
+          });
+
+          if (!existingTask) {
+            await models.Task.create(
+              {
+                taskTemplateId: task.taskTemplateId,
+                parentId: task.parentId,
+                childId: task.childId,
+                dueDate: nextDueDateTime,
+                dueTime: task.dueTime,
+                description: task.description, // Keep existing description if any
+                recurrence: task.recurrence,
+                rewardCoins: task.rewardCoins,
+                isRecurring: true,
+                status: "PENDING",
+              },
+              { transaction: t }
+            );
+          }
+        }
+
+        // Notify child
+        await models.Notification.create(
+          {
+            type: "task_approval",
+            message: `Your task "${taskTemplateTitle}" was approved! You earned ${task.rewardCoins} coins.`,
+            recipientType: "child",
+            recipientId: task.childId,
+            relatedItemType: "task",
+            relatedItemId: task.id,
+          },
+          { transaction: t }
+        );
+      } else if (status === "REJECTED") {
+        // Parent rejecting task
+        if (userType !== "parent") {
+          return next(new ErrorHandler("Only parents can reject tasks", 403));
+        }
+        if (task.status !== "COMPLETED") {
+          return next(
+            new ErrorHandler("Task must be completed to reject", 400)
+          );
+        }
+
+        await task.update(
+          {
+            status: "REJECTED",
+            rejectedAt: new Date(),
+            rejectionReason: reason,
+          },
+          { transaction: t }
+        );
+
+        // Reset streak
+        const streak = await models.Streak.findOne({
+          where: { childId: task.childId },
+          transaction: t,
+        });
+        if (streak) {
+          await streak.update({ streakCount: 0 }, { transaction: t });
+        }
+
+        // Notify child
+        await models.Notification.create(
+          {
+            type: "task_rejection",
+            message: `Your task "${taskTemplateTitle}" was rejected.${
+              reason ? ` Reason: ${reason}` : ""
+            }`,
+            recipientType: "child",
+            recipientId: task.childId,
+            relatedItemType: "task",
+            relatedItemId: task.id,
+          },
+          { transaction: t }
+        );
+      }
+
+      await t.commit();
+
+      // For the response, use the stored values or fetch fresh data
+      return res.status(200).json({
+        success: true,
+        message: `Task ${status.toLowerCase()} successfully`,
+        data: {
+          id: task.id,
+          title: taskTemplateTitle,
+          description: task.description, // From Task model
+          image: task.TaskTemplate?.image,
+          rewardCoins: task.rewardCoins,
+          status: status, // Use the new status instead of task.status
+          dueDate: task.dueDate,
+          dueTime: task.dueTime,
+          recurrence: task.recurrence,
+          isRecurring: task.isRecurring,
+          completedAt: task.completedAt,
+          approvedAt: task.approvedAt,
+          rejectedAt: task.rejectedAt,
+          rejectionReason: task.rejectionReason,
+        },
+      });
+    } catch (error) {
+      await t.rollback();
+      throw error;
+    }
+  } catch (error) {
+    console.error("Error updating task status:", error);
+    return next(
+      new ErrorHandler(error.message || "Failed to update task status", 500)
+    );
+  }
+});
+
+// Update task reward coins (Parent only)
+const updateTaskReward = asyncHandler(async (req, res, next) => {
+  const { rewardCoins } = req.body;
+
+  try {
+    // Validate reward coins
+    if (rewardCoins === undefined || rewardCoins === null) {
+      return next(new ErrorHandler("Reward coins is required", 400));
+    }
+
+    if (typeof rewardCoins !== "number" || rewardCoins < 0) {
+      return next(
+        new ErrorHandler("Reward coins must be a non-negative number", 400)
+      );
+    }
+
+    const task = await models.Task.findOne({
+      where: { id: req.params.taskId, parentId: req.parent?.id },
+      attributes: [
+        "id",
+        "taskTemplateId",
+        "childId",
+        "status",
+        "rewardCoins",
+        "dueDate",
+        "dueTime",
+        "description",
+        "recurrence",
+        "isRecurring",
+      ],
+    });
+
+    if (!task) {
+      return next(new ErrorHandler("Task not found", 404));
+    }
+
+    if (task.status === "COMPLETED" || task.status === "APPROVED") {
+      return next(
+        new ErrorHandler(
+          "Cannot update reward coins for a completed or approved task",
+          400
+        )
+      );
+    }
+
+    await task.update({ rewardCoins });
+
+    // Notify child of reward update
+    const taskTemplate = await models.TaskTemplate.findByPk(
+      task.taskTemplateId
+    );
+
+    if (taskTemplate) {
+      await models.Notification.create({
+        type: "reward_update",
+        message: `Reward for task "${taskTemplate.title}" updated to ${rewardCoins} coins.`,
+        recipientType: "child",
+        recipientId: task.childId,
+        relatedItemType: "task",
+        relatedItemId: task.id,
+      });
+    }
+
+    return res.status(200).json({
+      success: true, // Fixed typo from "succes"
+      message: "Task reward coins updated successfully",
+      data: task,
+    });
+  } catch (error) {
+    return next(new ErrorHandler(error.message, 500));
+  }
+});
+
+//------------------Stop task (Parent only)-------------------
+const deleteTasksByTemplate = asyncHandler(async (req, res, next) => {
+  const { childId, templateId } = req.params;
+  const parentId = req.parent.id;
+
+  try {
+    // Validate required parameters
+    if (!childId || !templateId) {
+      return next(
+        new ErrorHandler("Child ID and Template ID are required", 400)
+      );
+    }
+
+    // Validate task template exists
+    const taskTemplate = await models.TaskTemplate.findByPk(templateId);
+    if (!taskTemplate) {
+      return next(new ErrorHandler("Task template not found", 404));
+    }
+
+    // Validate child belongs to parent
+    const child = await models.Child.findOne({
+      where: { id: childId, parentId },
+    });
+    if (!child) {
+      return next(
+        new ErrorHandler(
+          "Child not found or not associated with this parent",
+          404
+        )
+      );
+    }
+
+    const t = await sequelize.transaction();
+
+    try {
+      // Find all tasks for the given child and template
+      const tasks = await models.Task.findAll({
+        where: {
+          childId: childId,
+          taskTemplateId: templateId,
+        },
+        include: [
+          {
+            model: models.TaskTemplate,
+            attributes: ["title"],
+          },
+        ],
+        transaction: t,
+      });
+
+      if (tasks.length === 0) {
+        await t.rollback();
+        return next(
+          new ErrorHandler(
+            "No tasks found for the given child and template",
+            404
+          )
+        );
+      }
+
+      // Separate tasks by status and recurrence
+      const upcomingTasks = tasks.filter((task) => task.status === "UPCOMING");
+      const dailyRecurringTasks = tasks.filter(
+        (task) =>
+          task.isRecurring === true &&
+          task.recurrence === "DAILY" &&
+          task.status !== "UPCOMING"
+      );
+
+      let deletedCount = 0;
+      let stoppedRecurringCount = 0;
+
+      // Delete all UPCOMING tasks
+      if (upcomingTasks.length > 0) {
+        const upcomingTaskIds = upcomingTasks.map((task) => task.id);
+
+        // Delete related notifications first (if any)
+        await models.Notification.destroy({
+          where: {
+            relatedItemType: "task",
+            relatedItemId: {
+              [Op.in]: upcomingTaskIds,
+            },
+          },
+          transaction: t,
+        });
+
+        // Delete upcoming tasks
+        const deleteResult = await models.Task.destroy({
+          where: {
+            id: {
+              [Op.in]: upcomingTaskIds,
+            },
+          },
+          transaction: t,
+        });
+
+        deletedCount = deleteResult;
+      }
+
+      // Stop daily recurring tasks by setting isRecurring to false
+      if (dailyRecurringTasks.length > 0) {
+        const recurringTaskIds = dailyRecurringTasks.map((task) => task.id);
+
+        const [updateCount] = await models.Task.update(
+          {
+            isRecurring: false,
+          },
+          {
+            where: {
+              id: {
+                [Op.in]: recurringTaskIds,
+              },
+            },
+            transaction: t,
+          }
+        );
+
+        stoppedRecurringCount = updateCount;
+
+        // Create notification for stopped recurring tasks
+        await models.Notification.create(
+          {
+            type: "task_update",
+            message: `Daily recurring task "${tasks[0].TaskTemplate.title}" has been stopped and will no longer create new instances.`,
+            recipientType: "child",
+            recipientId: childId,
+            relatedItemType: "task",
+            relatedItemId: dailyRecurringTasks[0].id,
+          },
+          { transaction: t }
+        );
+      }
+
+      await t.commit();
+
+      // Return success response with details
+      return res.status(200).json({
+        success: true,
+        message: "Tasks processed successfully",
+        data: {
+          taskTemplateId: templateId,
+          title: tasks[0]?.TaskTemplate?.title || "Unknown Template",
+          totalTasksFound: tasks.length,
+          upcomingTasksDeleted: deletedCount,
+          dailyRecurringTasksStopped: stoppedRecurringCount,
+          details: {
+            deletedUpcomingTasks: upcomingTasks.length,
+            stoppedRecurringTasks: dailyRecurringTasks.length,
+          },
+        },
+      });
+    } catch (error) {
+      await t.rollback();
+      throw error;
+    }
+  } catch (error) {
+    console.error("Error in deleteTasksByTemplate:", error);
+    return next(
+      new ErrorHandler(error.message || "Failed to delete tasks", 500)
+    );
+  }
+});
+
+// Delete a task (Parent only)
+const deleteTask = asyncHandler(async (req, res, next) => {
+  try {
+    const task = await models.Task.findOne({
+      where: { id: req.params.taskId, parentId: req.parent?.id },
+      include: [
+        {
+          model: models.TaskTemplate,
+          attributes: ["title"],
+        },
+      ],
+    });
+
+    if (!task) {
+      return next(
+        new ErrorHandler(
+          "Task not found or not associated with this parent",
+          404
+        )
+      );
+    }
+
+    if (task.status === "COMPLETED" || task.status === "APPROVED") {
+      return next(
+        new ErrorHandler("Cannot delete a completed or approved task", 400)
+      );
+    }
+
+    const taskTitle = task.TaskTemplate?.title || "Unknown Task";
+
+    // Use transaction for consistency
+    const t = await sequelize.transaction();
+
+    try {
+      // Delete related notifications first
+      await models.Notification.destroy({
+        where: {
+          relatedItemType: "task",
+          relatedItemId: task.id,
+        },
+        transaction: t,
+      });
+
+      // Notify child of task deletion
+      await models.Notification.create(
+        {
+          type: "task_deletion",
+          message: `Task "${taskTitle}" has been deleted by your parent.`,
+          recipientType: "child",
+          recipientId: task.childId,
+          relatedItemType: "task",
+          relatedItemId: task.id,
+        },
+        { transaction: t }
+      );
+
+      // Delete the task
+      await task.destroy({ transaction: t });
+
+      await t.commit();
+
+      return res.status(200).json({
+        success: true,
+        message: "Task deleted successfully",
+      });
+    } catch (error) {
+      await t.rollback();
+      throw error;
+    }
+  } catch (error) {
+    console.error("Error in deleteTask:", error);
+    return next(new ErrorHandler(error.message, 500));
+  }
+});
+
+module.exports = {
+  createTaskTemplate,
+  getAllTaskTemplate,
+  createTask,
+  listTasks,
+  getTasksByTemplateId,
+  updateTaskTemplateAndTasks,
+  getTaskWithTemplateDetails,
+  updateTaskStatus,
+  updateTaskReward,
+  deleteTasksByTemplate,
+  deleteTask,
+};
+
+// getChildTasks,
+// getParentTasks,
+/*
 //---------------- Get specific template details (Parent and Admin)-----------------------------
 // const getTaskTemplateDetails = asyncHandler(async (req, res, next) => {
 //   try {
@@ -1556,1051 +2573,6 @@ const getTaskWithTemplateDetails = asyncHandler(async (req, res, next) => {
 //   }
 // });
 
-// -----------------update task and task template------------------------------------
-const updateTaskTemplateAndTasks = asyncHandler(async (req, res, next) => {
-  // Parse form-data
-  const {
-    name,
-    description,
-    recurringDates,
-    childId,
-    dueTime,
-    duration,
-    recurrence,
-    status,
-    difficulty,
-    rewardCoins,
-  } = req.body;
-  const userType = req.userType;
-  const userId = req.parent?.id || req.admin?.id;
-  const taskTemplateId = req.params.taskTemplateId;
-  // Parse JSON fields if they come as strings (common in form-data)
-  const parsedRecurringDates = recurringDates
-    ? typeof recurringDates === "string"
-      ? JSON.parse(recurringDates)
-      : recurringDates
-    : [];
-
-    
-  if (!userType || !userId) {
-    return next(new ErrorHandler("Invalid authentication token", 401));
-  }
-
-  // if (!isValidUUID(taskTemplateId)) {
-  //   return next(new ErrorHandler('Invalid taskTemplateId. Must be a valid UUID', 400));
-  // }
-
-  // Validate task update fields if any are provided
-  const taskUpdates = {};
-  if (dueTime) {
-    if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(dueTime)) {
-      return next(
-        new ErrorHandler(
-          "Invalid dueTime format. Expected HH:MM (24-hour)",
-          400
-        )
-      );
-    }
-    taskUpdates.dueTime = dueTime;
-  }
-  if (duration !== undefined) {
-    const parsedDuration = parseInt(duration, 10);
-    if (isNaN(parsedDuration) || parsedDuration < 1) {
-      return next(
-        new ErrorHandler("Duration must be a positive number in minutes", 400)
-      );
-    }
-    taskUpdates.duration = parsedDuration;
-  }
-  if (recurrence) {
-    const allowedRecurrences = ["ONCE", "DAILY", "WEEKLY", "MONTHLY"];
-    if (!allowedRecurrences.includes(recurrence)) {
-      return next(
-        new ErrorHandler(
-          "Invalid recurrence. Allowed: ONCE, DAILY, WEEKLY, MONTHLY",
-          400
-        )
-      );
-    }
-    taskUpdates.recurrence = recurrence;
-    taskUpdates.isRecurring = recurrence !== "ONCE";
-  }
-  if (status) {
-    if (status !== "UPCOMING") {
-      return next(new ErrorHandler("Can only update to UPCOMING status", 400));
-    }
-    taskUpdates.status = status;
-  }
-  if (difficulty) {
-    const allowedDifficulties = ["EASY", "MEDIUM", "HARD"];
-    if (!allowedDifficulties.includes(difficulty)) {
-      return next(
-        new ErrorHandler("Invalid difficulty. Allowed: EASY, MEDIUM, HARD", 400)
-      );
-    }
-    taskUpdates.difficulty = difficulty;
-  }
-  if (rewardCoins !== undefined) {
-    const parsedReward = parseInt(rewardCoins, 10);
-    if (isNaN(parsedReward) || parsedReward < 0) {
-      return next(
-        new ErrorHandler("Reward coins must be a non-negative number", 400)
-      );
-    }
-    taskUpdates.rewardCoins = parsedReward;
-  }
-
-  // If task updates are provided, childId is required
-  if (Object.keys(taskUpdates).length > 0 && !childId) {
-    return next(
-      new ErrorHandler("childId is required when updating task fields", 400)
-    );
-  }
-
-  // If recurringDates is provided, childId is required
-  if (parsedRecurringDates.length > 0 && !childId) {
-    return next(
-      new ErrorHandler("childId is required when providing recurringDates", 400)
-    );
-  }
-
-  const t = await models.db.sequelize.transaction();
-
-  try {
-    // Fetch task template with creator information
-    const taskTemplate = await models.TaskTemplate.findByPk(taskTemplateId, {
-      include: [
-        { model: models.Parent, attributes: ["id"], required: false },
-        { model: models.Admin, attributes: ["id"], required: false },
-      ],
-      transaction: t,
-    });
-    console.log("taskTemplate:", taskTemplate);
-
-    if (!taskTemplate) {
-      await t.rollback();
-      return next(new ErrorHandler("Task template not found", 404));
-    }
-
-    // Updated Authorization checks
-    if (userType === "parent") {
-      // Parents can access both their own templates AND admin-created templates
-      // But they can only MODIFY their own templates
-      const isParentTemplate =
-        taskTemplate.userId && taskTemplate.userId === userId;
-      const isAdminTemplate =
-        taskTemplate.adminId && taskTemplate.adminId !== null;
-
-      // Parents can access the template if it's theirs or created by admin
-      if (!isParentTemplate && !isAdminTemplate) {
-        await t.rollback();
-        return next(
-          new ErrorHandler("Template not found or not accessible", 404)
-        );
-      }
-
-      // Check if parent is trying to modify template details (name, description, image)
-      const isModifyingTemplate = name || description !== undefined || req.file;
-      if (isModifyingTemplate && !isParentTemplate) {
-        await t.rollback();
-        return next(
-          new ErrorHandler("Parents cannot modify admin-created templates", 403)
-        );
-      }
-    } else if (userType === "admin") {
-      // Admins can only modify their own templates
-      if (taskTemplate.userId && taskTemplate.userId !== null) {
-        await t.rollback();
-        return next(
-          new ErrorHandler("Admins cannot modify parent-created templates", 403)
-        );
-      }
-      if (taskTemplate.adminId !== userId) {
-        await t.rollback();
-        return next(
-          new ErrorHandler("Not authorized to modify this template", 403)
-        );
-      }
-    } else {
-      await t.rollback();
-      return next(new ErrorHandler("Invalid user type", 403));
-    }
-
-    // Validate and update TaskTemplate (only if user has permission to modify)
-    const templateUpdates = {};
-    const canModifyTemplate =
-      (userType === "parent" && taskTemplate.userId === userId) ||
-      (userType === "admin" && taskTemplate.adminId === userId);
-
-    if (canModifyTemplate) {
-      if (name) {
-        const trimmedName = name.trim();
-        if (
-          !trimmedName ||
-          /^\d+$/.test(trimmedName) ||
-          /^[^a-zA-Z0-9]+$/.test(trimmedName)
-        ) {
-          await t.rollback();
-          return next(
-            new ErrorHandler(
-              "Invalid name. Must contain letters and not be empty or special characters only",
-              400
-            )
-          );
-        }
-        templateUpdates.title = trimmedName;
-      }
-      if (description !== undefined)
-        templateUpdates.description = description || null;
-
-      // Handle image upload
-      if (req.file) {
-        try {
-          const uploadResult = await uploadFile(req.file);
-          templateUpdates.image = {
-            url: uploadResult.url,
-            filename: uploadResult.filename,
-            originalName: uploadResult.originalName,
-            size: uploadResult.size,
-            mimetype: uploadResult.mimetype,
-          };
-
-          // Delete old image if it exists
-          if (taskTemplate.image && taskTemplate.image.filename) {
-            await deleteFile(taskTemplate.image.filename);
-          }
-        } catch (uploadError) {
-          await t.rollback();
-          console.error("Image upload error:", uploadError);
-          return next(new ErrorHandler("Failed to upload image", 500));
-        }
-      } else if (description === "null" || description === "") {
-        // Handle explicit removal of image
-        if (taskTemplate.image && taskTemplate.image.filename) {
-          await deleteFile(taskTemplate.image.filename);
-        }
-        templateUpdates.image = null;
-      }
-
-      // Update TaskTemplate if there are changes
-      if (Object.keys(templateUpdates).length > 0) {
-        await taskTemplate.update(templateUpdates, { transaction: t });
-      }
-    }
-
-    // Validate child
-    if (childId) {
-      if (!isValidUUID(childId)) {
-        await t.rollback();
-        return next(
-          new ErrorHandler("Invalid childId. Must be a valid UUID", 400)
-        );
-      }
-      const child = await models.Child.findOne({
-        where: {
-          id: childId,
-          parentId: userType === "parent" ? userId : { [Op.ne]: null },
-        },
-        transaction: t,
-      });
-      if (!child) {
-        await t.rollback();
-        return next(
-          new ErrorHandler(
-            "Child not found or not associated with this parent",
-            404
-          )
-        );
-      }
-    }
-
-    // Process recurringDates
-    let validDates = [];
-    if (parsedRecurringDates.length > 0) {
-      const uniqueDates = [...new Set(parsedRecurringDates)];
-      for (const date of uniqueDates) {
-        if (!/^\d{2}-\d{2}-\d{4}$/.test(date)) {
-          await t.rollback();
-          return next(
-            new ErrorHandler(
-              `Invalid date format: ${date}. Expected DD-MM-YYYY`,
-              400
-            )
-          );
-        }
-        const parsedDate = moment.tz(date, "DD-MM-YYYY", "Asia/Kolkata");
-        if (!parsedDate.isValid()) {
-          await t.rollback();
-          return next(new ErrorHandler(`Invalid date: ${date}`, 400));
-        }
-        validDates.push(date);
-      }
-      validDates = sortRecurrenceDates(validDates);
-    }
-
-    // FIXED: Fetch ALL existing tasks for the template/child, not just UPCOMING ones
-    const allExistingTasks = await models.Task.findAll({
-      where: {
-        taskTemplateId,
-        ...(childId && { childId }),
-      },
-      transaction: t,
-    });
-
-    // Separate tasks by status
-    const upcomingTasks = allExistingTasks.filter(task => task.status === "UPCOMING");
-    const nonUpcomingTasks = allExistingTasks.filter(task => task.status !== "UPCOMING");
-
-    // Get dates that already have non-upcoming tasks (these should be skipped)
-    const nonUpcomingTaskDates = nonUpcomingTasks.map((task) =>
-      moment(task.dueDate).tz("Asia/Kolkata").format("DD-MM-YYYY")
-    );
-
-    // Update or create tasks for recurringDates
-    if (validDates.length > 0 && childId) {
-      for (const date of validDates) {
-        // FIXED: Skip if this date already has a task with non-upcoming status
-        if (nonUpcomingTaskDates.includes(date)) {
-          console.log(`Skipping date ${date} - already has task with status other than UPCOMING`);
-          continue;
-        }
-
-        const dueDateTime = moment
-          .tz(
-            `${date} ${taskUpdates.dueTime || "00:00"}:00`,
-            "DD-MM-YYYY HH:mm:ss",
-            "Asia/Kolkata"
-          )
-          .toDate();
-
-        // Find existing UPCOMING task for this date
-        const existingUpcomingTask = upcomingTasks.find(
-          (t) =>
-            moment(t.dueDate).tz("Asia/Kolkata").format("DD-MM-YYYY") === date
-        );
-
-        if (existingUpcomingTask) {
-          // Update existing UPCOMING task
-          if (Object.keys(taskUpdates).length > 0) {
-            await existingUpcomingTask.update(taskUpdates, { transaction: t });
-          }
-        } else {
-          // Create new task only if no task exists for this date
-          await models.Task.create(
-            {
-              id: uuidv4(),
-              taskTemplateId,
-              parentId: userType === "parent" ? userId : null,
-              childId,
-              dueDate: dueDateTime,
-              dueTime: taskUpdates.dueTime || "00:00",
-              duration: taskUpdates.duration || 60,
-              recurrence: taskUpdates.recurrence || "ONCE",
-              rewardCoins:
-                taskUpdates.rewardCoins !== undefined
-                  ? taskUpdates.rewardCoins
-                  : calculateDefaultReward(
-                      taskTemplate.title,
-                      taskUpdates.difficulty || "EASY"
-                    ),
-              difficulty: taskUpdates.difficulty || "EASY",
-              isRecurring: taskUpdates.isRecurring || false,
-              status: "UPCOMING",
-              notificationEnabled: false,
-            },
-            { transaction: t }
-          );
-        }
-      }
-    }
-
-    // FIXED: Delete only UPCOMING tasks that are not in validDates and don't have non-upcoming status
-    for (const task of upcomingTasks) {
-      const taskDate = moment(task.dueDate)
-        .tz("Asia/Kolkata")
-        .format("DD-MM-YYYY");
-      if (!validDates.includes(taskDate)) {
-        await task.destroy({ transaction: t });
-      }
-    }
-
-    await t.commit();
-
-    // Fetch updated template for response
-    const updatedTemplate = await models.TaskTemplate.findByPk(taskTemplateId, {
-      attributes: ["id", "title", "description", "image"],
-      include: [
-        {
-          model: models.Task,
-          attributes: [
-            "id",
-            "dueDate",
-            "dueTime",
-            "status",
-            "difficulty",
-            "rewardCoins",
-            "recurrence",
-            "duration",
-          ],
-          where: { ...(childId && { childId }) },
-        },
-      ],
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "Task template and tasks updated successfully",
-      data: {
-        taskTemplate: {
-          id: updatedTemplate.id,
-          title: updatedTemplate.title,
-          description: updatedTemplate.description,
-          image: updatedTemplate.image,
-          tasks: updatedTemplate.Tasks.map((task) => ({
-            id: task.id,
-            dueDate: moment(task.dueDate)
-              .tz("Asia/Kolkata")
-              .format("DD-MM-YYYY"),
-            dueTime: task.dueTime,
-            status: task.status,
-            difficulty: task.difficulty,
-            rewardCoins: task.rewardCoins,
-            recurrence: task.recurrence,
-            duration: task.duration,
-          })),
-        },
-      },
-    });
-  } catch (error) {
-    await t.rollback();
-    console.error("Error updating task template and tasks:", error);
-    return next(
-      new ErrorHandler(
-        error.message || "Failed to update task template and tasks",
-        500
-      )
-    );
-  }
-});
-
-//----------------Mark task as completed (Child only)-------------------------
-const updateTaskStatus = asyncHandler(async (req, res, next) => {
-  const { taskId } = req.params;
-  const { status, reason} = req.body;
-  // console.log(req.parent);
-  console.log(req.child);
-
-  const userType = req.parent?.obj?.id
-    ? "parent"
-    : req.child?.obj?.id
-    ? "child"
-    : null;
-  const userId = req.parent?.obj?.id || req.child?.obj?.id;
-
-  try {
-    // Validate status
-    const allowedStatuses = ["COMPLETED", "APPROVED", "REJECTED"];
-    if (!allowedStatuses.includes(status)) {
-      return next(
-        new ErrorHandler(
-          "Invalid status. Allowed values: COMPLETED, APPROVED, REJECTED",
-          400
-        )
-      );
-    }
-
-    // Validate user
-    if (!userType || !userId) {
-      return next(new ErrorHandler("Invalid authentication token", 401));
-    }
-
-    // Find task
-    const taskQuery = {
-      where: { id: taskId },
-      include: [
-        {
-          model: models.TaskTemplate,
-          attributes: ["id", "title", "description", "image"],
-        },
-        { model: models.Child, attributes: ["id", "name"] },
-      ],
-    };
-    if (userType === "child") taskQuery.where.childId = userId;
-    else taskQuery.where.parentId = userId;
-
-    const task = await models.Task.findOne(taskQuery);
-    if (!task) {
-      return next(new ErrorHandler("Task not found or not accessible", 404));
-    }
-    console.log(task);
-
-    // Store template and child data before any updates (FIX: Store these values before task.update())
-    const taskTemplateTitle = task.TaskTemplate?.title;
-    const childName = task.Child?.name;
-
-    const t = await sequelize.transaction();
-    try {
-      // Mark related notifications as read for the current user
-      await models.Notification.update(
-        { isRead: true },
-        {
-          where: {
-            relatedItemType: 'task',
-            relatedItemId: taskId,
-            recipientType: userType,
-            recipientId: userId,
-            isRead: false
-          },
-          transaction: t
-        }
-      );
-
-      if (status === "COMPLETED") {
-        // Child marking task as completed
-        if (userType !== "child") {
-          return next(
-            new ErrorHandler("Only children can mark tasks as completed", 403)
-          );
-        }
-        if (task.status !== "PENDING") {
-          return next(new ErrorHandler(`Task is already ${task.status}`, 400));
-        }
-        if (task.status !== "PENDING") {
-          return next(
-            new ErrorHandler(
-              "Only PENDING tasks can be marked as completed",
-              400
-            )
-          );
-        }
-
-        await task.update(
-          { status: "COMPLETED", completedAt: new Date() },
-          { transaction: t }
-        );
-
-        // Notify parent
-        await models.Notification.create(
-          {
-            type: "task_completion",
-            message: `Task '${taskTemplateTitle}' marked as completed by ${childName} and waiting for approval`,
-            recipientType: "parent",
-            recipientId: task.parentId,
-            relatedItemType: "task",
-            relatedItemId: task.id,
-          },
-          { transaction: t }
-        );
-      } else if (status === "APPROVED") {
-        // Parent approving task
-        if (userType !== "parent") {
-          return next(new ErrorHandler("Only parents can approve tasks", 403));
-        }
-        if (task.status !== "COMPLETED") {
-          return next(
-            new ErrorHandler("Task must be completed to approve", 400)
-          );
-        }
-
-        await task.update(
-          { status: "APPROVED", approvedAt: new Date() },
-          { transaction: t }
-        );
-
-        // Award coins (FIX: Use stored template title)
-        await models.Transaction.create(
-          {
-            childId: task.childId,
-            taskId: task.id,
-            amount: task.rewardCoins,
-            type: "credit",
-            description: `Reward for completing task: ${taskTemplateTitle}`,
-          },
-          { transaction: t }
-        );
-
-        // Update streak
-        const streak = await models.Streak.findOne({
-          where: { childId: task.childId },
-          transaction: t,
-        });
-        const today = moment().tz("Asia/Kolkata").startOf("day");
-        if (streak) {
-          const lastStreakDate = streak.lastTaskDate
-            ? moment(streak.lastTaskDate).tz("Asia/Kolkata").startOf("day")
-            : null;
-          const streakCount =
-            lastStreakDate && today.diff(lastStreakDate, "days") === 1
-              ? streak.streakCount + 1
-              : 1;
-
-          await streak.update(
-            { streakCount, lastTaskDate: today.toDate() },
-            { transaction: t }
-          );
-
-          if (streakCount === 7) {
-            await models.Transaction.create(
-              {
-                childId: task.childId,
-                amount: 50,
-                type: "streak_bonus",
-                description: "Streak bonus for 7 consecutive days",
-              },
-              { transaction: t }
-            );
-            await streak.update({ streakCount: 0 }, { transaction: t });
-            await models.Notification.create(
-              {
-                type: "streak_bonus",
-                message:
-                  "Congratulations! You earned a 50-coin bonus for a 7-day streak!",
-                recipientType: "child",
-                recipientId: task.childId,
-                relatedItemType: "task",
-                relatedItemId: task.id,
-              },
-              { transaction: t }
-            );
-          }
-        } else {
-          await models.Streak.create(
-            {
-              childId: task.childId,
-              streakCount: 1,
-              lastTaskDate: today.toDate(),
-            },
-            { transaction: t }
-          );
-        }
-
-        // Create next instance for daily recurring tasks
-        if (task.isRecurring && task.recurrence === "DAILY") {
-          const nextDueDate = moment(task.dueDate)
-            .tz("Asia/Kolkata")
-            .add(1, "day")
-            .toDate();
-          const nextDueDateTime = moment
-            .tz(
-              `${nextDueDate.getFullYear()}-${
-                nextDueDate.getMonth() + 1
-              }-${nextDueDate.getDate()} ${task.dueTime}:00`,
-              "YYYY-MM-DD HH:mm:ss",
-              "Asia/Kolkata"
-            )
-            .toDate();
-
-          const existingTask = await models.Task.findOne({
-            where: {
-              childId: task.childId,
-              taskTemplateId: task.taskTemplateId,
-              dueDate: nextDueDateTime,
-            },
-            transaction: t,
-          });
-
-          if (!existingTask) {
-            await models.Task.create(
-              {
-                taskTemplateId: task.taskTemplateId,
-                parentId: task.parentId,
-                childId: task.childId,
-                dueDate: nextDueDateTime,
-                dueTime: task.dueTime,
-                duration: task.duration,
-                recurrence: task.recurrence,
-                rewardCoins: task.rewardCoins,
-                difficulty: task.difficulty,
-                isRecurring: true,
-                status: "PENDING",
-                notificationEnabled: task.notificationEnabled,
-              },
-              { transaction: t }
-            );
-          }
-        }
-
-        // Notify child (FIX: Use stored template title)
-        await models.Notification.create(
-          {
-            type: "task_approval",
-            message: `Your task "${taskTemplateTitle}" was approved! You earned ${task.rewardCoins} coins.`,
-            recipientType: "child",
-            recipientId: task.childId,
-            relatedItemType: "task",
-            relatedItemId: task.id,
-          },
-          { transaction: t }
-        );
-      } else if (status === "REJECTED") {
-        // Parent rejecting task
-        if (userType !== "parent") {
-          return next(new ErrorHandler("Only parents can reject tasks", 403));
-        }
-        if (task.status !== "COMPLETED") {
-          return next(
-            new ErrorHandler("Task must be completed to reject", 400)
-          );
-        }
-
-        await task.update(
-          {
-            status: "REJECTED",
-            rejectedAt: new Date(),
-            rejectionReason: reason,
-          },
-          { transaction: t }
-        );
-
-        // Reset streak
-        const streak = await models.Streak.findOne({
-          where: { childId: task.childId },
-          transaction: t,
-        });
-        if (streak) {
-          await streak.update({ streakCount: 0 }, { transaction: t });
-        }
-
-        // Notify child (FIX: Use stored template title)
-        await models.Notification.create(
-          {
-            type: "task_rejection",
-            message: `Your task "${taskTemplateTitle}" was rejected.${
-              reason ? ` Reason: ${reason}` : ""
-            }`,
-            recipientType: "child",
-            recipientId: task.childId,
-            relatedItemType: "task",
-            relatedItemId: task.id,
-          },
-          { transaction: t }
-        );
-      }
-
-      await t.commit();
-
-      // For the response, use the stored values or fetch fresh data
-      return res.status(200).json({
-        success: true,
-        message: `Task ${status.toLowerCase()} successfully`,
-        data: {
-          id: task.id,
-          title: taskTemplateTitle,
-          description: task.TaskTemplate?.description,
-          image: task.TaskTemplate?.image,
-          rewardCoins: task.rewardCoins,
-          difficulty: task.difficulty,
-          status: status, // Use the new status instead of task.status
-          dueDate: task.dueDate,
-          dueTime: task.dueTime,
-          duration: task.duration,
-          isRecurring: task.isRecurring,
-          recurrence: task.recurrence,
-          completedAt: task.completedAt,
-          approvedAt: task.approvedAt,
-          rejectedAt: task.rejectedAt,
-          rejectionReason: task.rejectionReason,
-        },
-      });
-    } catch (error) {
-      await t.rollback();
-      throw error;
-    }
-  } catch (error) {
-    console.error("Error updating task status:", error);
-    return next(
-      new ErrorHandler(error.message || "Failed to update task status", 500)
-    );
-  }
-});
-
-// Update task reward coins (Parent only)
-const updateTaskReward = asyncHandler(async (req, res, next) => {
-  const { rewardCoins } = req.body;
-  try {
-    const task = await models.Task.findOne({
-      where: { id: req.params.taskId, parentId: req.parent?.id },
-      attributes: [
-        "id",
-        "taskTemplateId",
-        "childId",
-        "status",
-        "rewardCoins",
-        "dueDate",
-        "dueTime",
-        "duration",
-        "recurrence",
-        "difficulty",
-        "isRecurring",
-      ],
-    });
-
-    if (!task) {
-      return next(new ErrorHandler("Task not found", 404));
-    }
-
-    if (task.status === "COMPLETED" || task.status === "APPROVED") {
-      return next(
-        new ErrorHandler(
-          "Cannot update reward coins for a completed or approved task",
-          400
-        )
-      );
-    }
-
-    if (rewardCoins < 0) {
-      return next(new ErrorHandler("Reward coins cannot be negative", 400));
-    }
-
-    await task.update({ rewardCoins });
-
-    // Notify child of reward update
-    const taskTemplate = await models.TaskTemplate.findByPk(
-      task.taskTemplateId
-    );
-    await models.Notification.create({
-      type: "reward_update",
-      message: `Reward for task "${taskTemplate.title}" updated to ${rewardCoins} coins.`,
-      recipientType: "child",
-      recipientId: task.childId,
-      relatedItemType: "task",
-      relatedItemId: task.id,
-    });
-
-    return res.status(200).json({
-      succes: true,
-      message: "chores coin rewards updated successfully",
-      data: task,
-    });
-  } catch (error) {
-    return next(new ErrorHandler(error.message, 500));
-  }
-});
-
-//------------------stop task (Parent only)-------------------
-const deleteTasksByTemplate = asyncHandler(async (req, res, next) => {
-  const { childId, templateId } = req.params;
-  const parentId = req.parent.id;
-
-  try {
-    // Validate required parameters
-    if (!childId || !templateId) {
-      return next(new ErrorHandler('Child ID and Template ID are required', 400));
-    }
-
-    // Validate task template exists
-    const taskTemplate = await models.TaskTemplate.findByPk(templateId);
-    if (!taskTemplate) {
-      return next(new ErrorHandler('Task template not found', 404));
-    }
-
-    // Validate child belongs to parent
-    const child = await models.Child.findOne({
-      where: { id: childId, parentId },
-    });
-    if (!child) {
-      return next(
-        new ErrorHandler(
-          'Child not found or not associated with this parent',
-          404
-        )
-      );
-    }
-
-    const t = await sequelize.transaction();
-    
-    try {
-      // Find all tasks for the given child and template
-      const tasks = await models.Task.findAll({
-        where: {
-          childId: childId,
-          taskTemplateId: templateId
-        },
-        include: [
-          {
-            model: models.TaskTemplate,
-            attributes: ['title']
-          }
-        ],
-        transaction: t
-      });
-
-      if (tasks.length === 0) {
-        await t.rollback();
-        return next(new ErrorHandler('No tasks found for the given child and template', 404));
-      }
-
-      // Separate tasks by status and recurrence
-      const upcomingTasks = tasks.filter(task => task.status === 'UPCOMING');
-      const dailyRecurringTasks = tasks.filter(task => 
-        task.isRecurring === true && 
-        task.recurrence === 'DAILY' &&
-        task.status !== 'UPCOMING'
-      );
-
-      let deletedCount = 0;
-      let stoppedRecurringCount = 0;
-
-      // Delete all UPCOMING tasks
-      if (upcomingTasks.length > 0) {
-        const upcomingTaskIds = upcomingTasks.map(task => task.id);
-        
-        // Delete related notifications first (if any)
-        await models.Notification.destroy({
-          where: {
-            relatedItemType: 'task',
-            relatedItemId: {
-              [Op.in]: upcomingTaskIds
-            }
-          },
-          transaction: t
-        });
-
-        // Delete upcoming tasks
-        const deleteResult = await models.Task.destroy({
-          where: {
-            id: {
-              [Op.in]: upcomingTaskIds
-            }
-          },
-          transaction: t
-        });
-
-        deletedCount = deleteResult;
-      }
-
-      // Stop daily recurring tasks by setting isRecurring to false
-      // This prevents the scheduler from creating new instances
-      if (dailyRecurringTasks.length > 0) {
-        const recurringTaskIds = dailyRecurringTasks.map(task => task.id);
-        
-        const [updateCount] = await models.Task.update(
-          { 
-            isRecurring: false
-          },
-          {
-            where: {
-              id: {
-                [Op.in]: recurringTaskIds
-              }
-            },
-            transaction: t
-          }
-        );
-
-        stoppedRecurringCount = updateCount;
-
-        // Create notification for stopped recurring tasks
-        if (dailyRecurringTasks[0]?.notificationEnabled) {
-          await models.Notification.create({
-            type: "task_update",
-            message: `Daily recurring task "${tasks[0].TaskTemplate.title}" has been stopped and will no longer create new instances.`,
-            recipientType: "child",
-            recipientId: childId,
-            relatedItemType: "task",
-            relatedItemId: dailyRecurringTasks[0].id
-          }, { transaction: t });
-        }
-      }
-
-      await t.commit();
-
-      // Return success response with details
-      return res.status(200).json({
-        success: true,
-        message: 'Tasks processed successfully',
-        data: {
-          taskTemplateId: templateId,
-          title: tasks[0]?.TaskTemplate?.title || 'Unknown Template',
-          totalTasksFound: tasks.length,
-          upcomingTasksDeleted: deletedCount,
-          dailyRecurringTasksStopped: stoppedRecurringCount,
-          details: {
-            deletedUpcomingTasks: upcomingTasks.length,
-            stoppedRecurringTasks: dailyRecurringTasks.length
-          }
-        }
-      });
-
-    } catch (error) {
-      await t.rollback();
-      throw error;
-    }
-
-  } catch (error) {
-    console.error('Error in deleteTasksByTemplate:', error);
-    return next(
-      new ErrorHandler(error.message || 'Failed to delete tasks', 500)
-    );
-  }
-});
-
-// Delete a task (Parent only)
-const deleteTask = asyncHandler(async (req, res, next) => {
-  try {
-    const task = await models.Task.findOne({
-      where: { id: req.params.taskId, parentId: req.parent?.id },
-    });
-
-    if (!task) {
-      return next(
-        new ErrorHandler(
-          "Task not found or not associated with this parent",
-          404
-        )
-      );
-    }
-
-    if (task.status === "COMPLETED" || task.status === "APPROVED") {
-      return next(
-        new ErrorHandler("Cannot delete a completed or approved task", 400)
-      );
-    }
-
-    const taskTemplate = await models.TaskTemplate.findByPk(
-      task.taskTemplateId
-    );
-
-    if (!taskTemplate) {
-      return next(new ErrorHandler("Task template not found", 404));
-    }
-
-    // Notify child of task deletion
-    await models.Notification.create({
-      type: "task_deletion",
-      message: `Task "${taskTemplate.title}" has been deleted by your parent.`,
-      recipientType: "child",
-      recipientId: task.childId,
-      relatedItemType: "task",
-      relatedItemId: task.id,
-    });
-
-    await task.destroy();
-    return res
-      .status(200)
-      .json({ success: true, message: "Task deleted successfully" });
-  } catch (error) {
-    return next(new ErrorHandler(error.message, 500));
-  }
-});
-
-module.exports = {
-  createTaskTemplate,
-  getAllTaskTemplate,
-  createTask,
-  listTasks,
-  getTasksByTemplateId,
-  updateTaskTemplateAndTasks,
-  getTaskWithTemplateDetails,
-  // getChildTasks,
-  // getParentTasks,
-  updateTaskStatus,
-  updateTaskReward,
-  deleteTasksByTemplate,
-  deleteTask,
-};
-
-/*
 // Get all tasks for a child (Child only)
 const getChildTasks = asyncHandler(async (req, res,next) => {
   try {

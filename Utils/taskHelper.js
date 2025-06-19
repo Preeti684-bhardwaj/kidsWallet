@@ -3,10 +3,10 @@ const moment = require('moment');
 const { v4: uuidv4, validate: isValidUUID } = require('uuid');
 const asyncHandler = require('../Utils/asyncHandler');
 const ErrorHandler = require('../Utils/errorHandle');
-const models = require('../Modals/index'); // Assuming you have an index file that exports all models
+const models = require('../Modals/index');
 
 // Calculate default reward coins based on difficulty and title
-const calculateDefaultReward = (title, difficulty) => {
+const calculateDefaultReward = (title, difficulty = 'EASY') => {
   const baseRewards = {
     'Making the bed': 5,
     'Washing the dishes': 10,
@@ -17,8 +17,14 @@ const calculateDefaultReward = (title, difficulty) => {
     MEDIUM: 1.5,
     HARD: 2,
   };
-  const baseReward = baseRewards[title] || 5;
+  const baseReward = baseRewards[title] || 10; // Default to 10 coins
   return Math.round(baseReward * (difficultyMultiplier[difficulty] || 1));
+};
+
+// Validate time format (HH:MM)
+const validateTimeFormat = (time) => {
+  if (!time) return true; // Allow null/undefined
+  return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time);
 };
 
 // Sort recurrence dates (validation is now handled by the model)
@@ -32,12 +38,12 @@ const sortRecurrenceDates = (dates) => {
 const validateQueryParams = (query) => {
   const errors = [];
 
-  if (query.status && !['ALL','UPCOMING','PENDING', 'COMPLETED', 'APPROVED', 'REJECTED', 'OVERDUE'].includes(query.status)) {
-    errors.push('Invalid status. Must be UPCOMING,PENDING, COMPLETED, APPROVED, REJECTED, or OVERDUE');
+  if (query.status && !['ALL', 'UPCOMING', 'PENDING', 'COMPLETED', 'APPROVED', 'REJECTED', 'OVERDUE'].includes(query.status)) {
+    errors.push('Invalid status. Must be UPCOMING, PENDING, COMPLETED, APPROVED, REJECTED, or OVERDUE');
   }
 
-  if (query.difficulty && !['EASY', 'MEDIUM', 'HARD'].includes(query.difficulty)) {
-    errors.push('Invalid difficulty. Must be EASY, MEDIUM, or HARD');
+  if (query.recurrence && !['ONCE', 'DAILY', 'WEEKLY', 'MONTHLY'].includes(query.recurrence)) {
+    errors.push('Invalid recurrence. Must be ONCE, DAILY, WEEKLY, or MONTHLY');
   }
 
   if (query.dueDateFrom && isNaN(Date.parse(query.dueDateFrom))) {
@@ -56,6 +62,14 @@ const validateQueryParams = (query) => {
     errors.push('Invalid childId. Must be a valid UUID');
   }
 
+  if (query.parentId && !isValidUUID(query.parentId)) {
+    errors.push('Invalid parentId. Must be a valid UUID');
+  }
+
+  if (query.taskTemplateId && !isValidUUID(query.taskTemplateId)) {
+    errors.push('Invalid taskTemplateId. Must be a valid UUID');
+  }
+
   const page = parseInt(query.page) || 1;
   const limit = parseInt(query.limit) || 10;
 
@@ -70,111 +84,117 @@ const validateQueryParams = (query) => {
   return { errors, page, limit };
 };
 
+// Check if a task is overdue
+const isTaskOverdue = (task) => {
+  const now = moment().tz('Asia/Kolkata');
+  const taskDueDate = moment(task.dueDate).tz('Asia/Kolkata');
+  
+  if (task.status !== 'PENDING') return false;
+  
+  // If task is due on a different day
+  if (!taskDueDate.isSame(now, 'day')) {
+    return taskDueDate.isBefore(now, 'day');
+  }
+  
+  // If task is due today, check time
+  if (task.dueTime) {
+    const currentTime = now.format('HH:mm');
+    return task.dueTime < currentTime;
+  }
+  
+  return false;
+};
 
-//--------------------Additional helper function for getting filter options---------------------------------------------------------
-// const getTaskTemplateFilterOptions = asyncHandler(async (req, res, next) => {
-//   try {
-//     let options = {
-//       sortOptions: [
-//         { value: 'createdAt', label: 'Created Date' },
-//         { value: 'updatedAt', label: 'Updated Date' },
-//         { value: 'title', label: 'Title' }
-//       ],
-//       sortOrders: [
-//         { value: 'DESC', label: 'Descending' },
-//         { value: 'ASC', label: 'Ascending' }
-//       ],
-//       createdByOptions: [
-//         { value: 'all', label: 'All' },
-//         { value: 'parent', label: 'Parents' },
-//         { value: 'admin', label: 'Admins' }
-//       ]
-//     };
+// Update overdue tasks
+const updateOverdueTasks = async () => {
+  try {
+    const tasks = await models.Task.findAll({
+      where: {
+        status: 'PENDING'
+      }
+    });
 
-//     if (req.userType === "admin") {
-//       // For admins, also provide list of parents and admins for filtering
-//       const [parents, admins] = await Promise.all([
-//         models.Parent.findAll({
-//           attributes: ['id', 'email'],
-//           order: [['createdAt', 'DESC']]
-//         }),
-//         models.Admin.findAll({
-//           attributes: ['id', 'email'],
-//           order: [['createdAt', 'DESC']]
-//         })
-//       ]);
+    const overdueTasks = tasks.filter(task => isTaskOverdue(task));
+    
+    for (const task of overdueTasks) {
+      await task.update({ status: 'OVERDUE' });
+    }
+    
+    return overdueTasks.length;
+  } catch (error) {
+    console.error('Error updating overdue tasks:', error);
+    throw error;
+  }
+};
 
-//       options.parents = parents.map(parent => ({
-//         value: parent.id,
-//         label: `${parent.firstName || ''} ${parent.lastName || ''}`.trim() || parent.email
-//       }));
+// Generate next due date for recurring tasks
+const getNextDueDate = (currentDueDate, recurrence) => {
+  const nextDate = moment(currentDueDate).tz('Asia/Kolkata');
+  
+  switch (recurrence) {
+    case 'DAILY':
+      return nextDate.add(1, 'day').toDate();
+    case 'WEEKLY':
+      return nextDate.add(1, 'week').toDate();
+    case 'MONTHLY':
+      return nextDate.add(1, 'month').toDate();
+    default:
+      return null;
+  }
+};
 
-//       options.admins = admins.map(admin => ({
-//         value: admin.id,
-//         label: `${admin.firstName || ''} ${admin.lastName || ''}`.trim() || admin.email
-//       }));
-//     }
+// Build task query filters
+const buildTaskFilters = (filters = {}) => {
+  const where = {};
+  const include = [];
 
-//     return res.status(200).json({
-//       success: true,
-//       message: "Filter options fetched successfully",
-//       data: options
-//     });
-//   } catch (error) {
-//     console.error("Error fetching filter options:", error);
-//     return next(
-//       new ErrorHandler(error.message || "Failed to fetch filter options", 500)
-//     );
-//   }
-// });
+  if (filters.status && filters.status !== 'ALL') {
+    where.status = filters.status;
+  }
 
-// // // Check if a task is overdue based on dueTime
-// const isTaskOverdue = (task) => {
-//   const now = moment();
-//   const dueTime = moment(task.dueTime);
-//   return task.status === 'PENDING' && now.isAfter(dueTime);
-// };
+  if (filters.childId) {
+    where.childId = filters.childId;
+  }
 
-// // Update task status to overdue
-// const updateTaskStatus = async (Task) => {
-//   const tasks = await Task.findAll({
-//     where: {
-//       status: 'PENDING',
-//       dueTime: { [Op.lt]: new Date() },
-//     },
-//   });
+  if (filters.parentId) {
+    where.parentId = filters.parentId;
+  }
 
-//   for (const task of tasks) {
-//     await task.update({ status: 'OVERDUE' });
-//   }
-// };
+  if (filters.taskTemplateId) {
+    where.taskTemplateId = filters.taskTemplateId;
+  }
 
-// // Generate next occurrences for recurring tasks based on recurrenceDates
-// const generateNextOccurrences = (task) => {
-//   const now = moment();
-//   const recurrenceDates = task.recurrenceDates || [];
-//   const dueTime = moment(task.dueTime);
-//   const currentDate = dueTime.format('DD-MM-YYYY');
-//   const timeOfDay = dueTime.format('HH:mm:ss');
+  if (filters.recurrence) {
+    where.recurrence = filters.recurrence;
+  }
 
-//   // Find dates after the current task's due date
-//   const futureDates = recurrenceDates.filter(date => {
-//     return moment(date, 'DD-MM-YYYY').isAfter(dueTime);
-//   });
+  if (filters.isRecurring !== undefined) {
+    where.isRecurring = filters.isRecurring;
+  }
 
-//   // Map future dates to new dueTime values, preserving the time of day
-//   return futureDates.map(date => {
-//     const newDueTime = moment(`${date} ${timeOfDay}`, 'DD-MM-YYYY HH:mm:ss').toDate();
-//     return { nextDueTime: newDueTime };
-//   });
-// };
+  if (filters.dueDateFrom || filters.dueDateTo) {
+    where.dueDate = {};
+    if (filters.dueDateFrom) {
+      where.dueDate[Op.gte] = new Date(filters.dueDateFrom);
+    }
+    if (filters.dueDateTo) {
+      where.dueDate[Op.lte] = new Date(filters.dueDateTo);
+    }
+  }
+
+  // Always include TaskTemplate
+  include.push({ model: models.TaskTemplate });
+
+  return { where, include };
+};
 
 module.exports = {
   calculateDefaultReward,
+  validateTimeFormat,
   sortRecurrenceDates,
-  validateQueryParams
+  validateQueryParams,
+  isTaskOverdue,
+  updateOverdueTasks,
+  getNextDueDate,
+  buildTaskFilters
 };
-// getTaskTemplateFilterOptions,
-// isTaskOverdue,
-// updateTaskStatus,
-// generateNextOccurrences,

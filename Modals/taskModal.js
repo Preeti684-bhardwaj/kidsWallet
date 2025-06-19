@@ -16,13 +16,17 @@ module.exports = (sequelize, DataTypes) => {
         is: /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/
       }
     },
-    duration: {
-      type: DataTypes.INTEGER, // Duration in minutes
-      allowNull: false,
-      validate: {
-        min: { args: 1, msg: 'Duration must be at least 1 minute' },
-      },
+    description: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
+    // duration: {
+    //   type: DataTypes.INTEGER, // Duration in minutes
+    //   allowNull: false,
+    //   validate: {
+    //     min: { args: 1, msg: 'Duration must be at least 1 minute' },
+    //   },
+    // },
     recurrence: {
       type: DataTypes.ENUM('ONCE', 'DAILY', 'WEEKLY', 'MONTHLY'),
       allowNull: false,
@@ -34,16 +38,16 @@ module.exports = (sequelize, DataTypes) => {
     rewardCoins: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 0,
+      defaultValue: 10,
       // validate: {
       //   min: { args: 0, msg: 'Reward coins cannot be negative' },
       // },
     },
-    difficulty: {
-      type: DataTypes.ENUM('EASY', 'MEDIUM', 'HARD'),
-      allowNull: false,
-      defaultValue: 'EASY',
-    },
+    // difficulty: {
+    //   type: DataTypes.ENUM('EASY', 'MEDIUM', 'HARD'),
+    //   allowNull: false,
+    //   defaultValue: 'EASY',
+    // },
     isRecurring: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
