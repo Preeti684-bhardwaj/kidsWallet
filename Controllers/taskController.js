@@ -1200,7 +1200,6 @@ const getTaskTemplateWithRecurringDates = asyncHandler(async (req, res, next) =>
     );
   }
 });
-
 // -----------------update task and task template------------------------------------
 const updateTaskTemplateAndTasks = asyncHandler(async (req, res, next) => {
   // Parse form-data
