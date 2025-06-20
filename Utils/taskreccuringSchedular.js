@@ -5,7 +5,7 @@ const models = require('../Modals/index');
 const sequelize = models.db.sequelize;
 
 const scheduleTaskStatusAndRecurrence = () => {
-  cron.schedule('0 0 * * *', async () => {
+  cron.schedule('* * * * *', async () => {
     console.log('Running daily task scheduler at', new Date().toISOString());
     const t = await sequelize.transaction();
     try {

@@ -1005,186 +1005,198 @@ const listTasks = asyncHandler(async (req, res, next) => {
 });
 
 //---------------- Get specific task with template details (Parent and Child)-----------------------------
-const getTaskWithTemplateDetails = asyncHandler(async (req, res, next) => {
+const getTaskTemplateWithRecurringDates = asyncHandler(async (req, res, next) => {
   try {
-    const { taskId } = req.params;
+    const { taskTemplateId, childId } = req.params;
 
     // Get user type and ID from auth middleware
-    const userType = req.userType; // This comes from your auth middleware
-    const userId = req.parent?.id || req.admin?.id;
+    const userType = req.userType;
+    const userId = req.parent?.id || req.admin?.id || req.child?.id;
 
-    console.log("userType :", userType, "userId:", userId, "taskId:", taskId);
+    console.log("userType:", userType, "userId:", userId, "taskTemplateId:", taskTemplateId, "childId:", childId);
 
     // Validate user authentication
     if (!userType || !userId) {
       return next(new ErrorHandler("Invalid authentication token", 401));
     }
 
-    // Validate taskId
-    if (!isValidUUID(taskId)) {
+    // Validate taskTemplateId and childId
+    if (!isValidUUID(taskTemplateId)) {
       return next(
-        new ErrorHandler("Invalid taskId. Must be a valid UUID", 400)
+        new ErrorHandler("Invalid taskTemplateId. Must be a valid UUID", 400)
       );
     }
 
-    // Fetch task with all related data
-    const task = await models.Task.findByPk(taskId, {
+    if (!isValidUUID(childId)) {
+      return next(
+        new ErrorHandler("Invalid childId. Must be a valid UUID", 400)
+      );
+    }
+
+    // Fetch task template with creator details
+    const taskTemplate = await models.TaskTemplate.findByPk(taskTemplateId, {
       include: [
         {
-          model: models.TaskTemplate,
-          attributes: [
-            "id",
-            "title",
-            "image",
-            "userId",
-            "adminId",
-            "createdAt",
-            "updatedAt",
-          ],
-          include: [
-            {
-              model: models.Parent,
-              attributes: ["id", "email"],
-              required: false,
-            },
-            {
-              model: models.Admin,
-              attributes: ["id", "email"],
-              required: false,
-            },
-          ],
-        },
-        {
-          model: models.Child,
-          as: "Child",
-          attributes: ["id", "parentId"],
-          include: [
-            {
-              model: models.Parent,
-              as: "parent",
-              attributes: ["id", "email"],
-              required: false,
-            },
-          ],
-        },
-        {
           model: models.Parent,
+          attributes: ["id", "email"],
+          required: false,
+        },
+        {
+          model: models.Admin,
           attributes: ["id", "email"],
           required: false,
         },
       ],
     });
 
-    if (!task) {
-      return next(new ErrorHandler("Task not found", 404));
+    if (!taskTemplate) {
+      return next(new ErrorHandler("Task template not found", 404));
+    }
+
+    // Verify child exists and get child details
+    const child = await models.Child.findByPk(childId, {
+      include: [
+        {
+          model: models.Parent,
+          as: "parent",
+          attributes: ["id", "email"],
+          required: false,
+        },
+      ],
+    });
+
+    if (!child) {
+      return next(new ErrorHandler("Child not found", 404));
     }
 
     // Authorization checks based on user type
     if (userType === "parent") {
       // Parent can access:
-      // 1. Tasks assigned to their children
-      // 2. Tasks created by them
-      const isParentTask = task.parentId === userId;
-      const isChildOfParent = task.Child && task.Child.parentId === userId;
+      // 1. Templates created by themselves (userId matches)
+      // 2. Templates created by admin (adminId exists, userId is null)
+      // 3. Child must belong to the parent
+      const isOwnTemplate = taskTemplate.userId === userId;
+      const isAdminTemplate = taskTemplate.adminId && !taskTemplate.userId;
+      const isOwnChild = child.parentId === userId;
 
-      if (!isParentTask && !isChildOfParent) {
+      if (!isOwnChild) {
         return next(
-          new ErrorHandler("Not authorized to access this task", 403)
+          new ErrorHandler("Not authorized to access this child's data", 403)
         );
       }
 
-      // Additional validation for template access
-      if (task.TaskTemplate) {
-        const template = task.TaskTemplate;
-        // Parent can access:
-        // 1. Templates created by themselves (userId matches)
-        // 2. Templates created by admin (adminId exists, userId is null)
-        const isOwnTemplate = template.userId === userId;
-        const isAdminTemplate = template.adminId && !template.userId;
-
-        if (!isOwnTemplate && !isAdminTemplate) {
-          return next(
-            new ErrorHandler("Not authorized to access this task template", 403)
-          );
-        }
+      if (!isOwnTemplate && !isAdminTemplate) {
+        return next(
+          new ErrorHandler("Not authorized to access this task template", 403)
+        );
       }
     } else if (userType === "child") {
-      // Child can only access their own tasks
-      if (task.childId !== userId) {
+      // Child can only access their own data
+      if (childId !== userId) {
         return next(
-          new ErrorHandler("Not authorized to access this task", 403)
+          new ErrorHandler("Not authorized to access this child's data", 403)
         );
       }
+    } else if (userType === "admin") {
+      // Admin can access all templates and children
+      // No additional restrictions needed
     }
 
-    // Format the response data
-    const taskData = {
-      id: task.id,
-      dueDate: task.dueDate,
-      dueTime: task.dueTime,
-      description: task.description, // Now from Task model
-      recurrence: task.recurrence,
-      status: task.status,
-      rewardCoins: task.rewardCoins,
-      isRecurring: task.isRecurring,
-      completedAt: task.completedAt,
-      approvedAt: task.approvedAt,
-      rejectedAt: task.rejectedAt,
-      rejectionReason: task.rejectionReason,
-      createdAt: task.createdAt,
-      updatedAt: task.updatedAt,
-      // Child information
-      child: task.Child
+    // Fetch all tasks for this child and task template to get recurring dates
+    const recurringTasks = await models.Task.findAll({
+      where: {
+        childId: childId,
+        taskTemplateId: taskTemplateId,
+      },
+      attributes: [
+        "id",
+        "dueDate",
+        "dueTime",
+        "description",
+        "status",
+        "recurrence",
+        "isRecurring",
+        "rewardCoins",
+        "createdAt",
+        "updatedAt",
+        "completedAt",
+        "approvedAt",
+        "rejectedAt",
+      ],
+      order: [["dueDate", "ASC"]],
+    });
+
+    // Format template data
+    const templateData = {
+      id: taskTemplate.id,
+      title: taskTemplate.title,
+      image: taskTemplate.image,
+      createdAt: taskTemplate.createdAt,
+      updatedAt: taskTemplate.updatedAt,
+      createdBy: taskTemplate.userId ? "parent" : "admin",
+      creator: taskTemplate.userId
         ? {
-            id: task.Child.id,
-            name: task.Child.name,
-            parentId: task.Child.parentId,
+            id: taskTemplate.Parent?.id,
+            email: taskTemplate.Parent?.email,
+            type: "parent",
           }
-        : null,
-      // Task creator (parent) information
-      taskCreator: task.Parent
+        : {
+            id: taskTemplate.Admin?.id,
+            email: taskTemplate.Admin?.email,
+            type: "admin",
+          },
+    };
+
+    // Format child data
+    const childData = {
+      id: child.id,
+      name: child.name,
+      parentId: child.parentId,
+      parent: child.parent
         ? {
-            id: task.Parent.id,
-            email: task.Parent.email,
+            id: child.parent.id,
+            email: child.parent.email,
           }
         : null,
     };
 
-    // Template information (removed description as it's no longer in TaskTemplate)
-    const templateData = task.TaskTemplate
-      ? {
-          id: task.TaskTemplate.id,
-          title: task.TaskTemplate.title,
-          image: task.TaskTemplate.image,
-          createdAt: task.TaskTemplate.createdAt,
-          updatedAt: task.TaskTemplate.updatedAt,
-          createdBy: task.TaskTemplate.userId ? "parent" : "admin",
-          creator: task.TaskTemplate.userId
-            ? {
-                id: task.TaskTemplate.Parent?.id,
-                email: task.TaskTemplate.Parent?.email,
-                type: "parent",
-              }
-            : {
-                id: task.TaskTemplate.Admin?.id,
-                email: task.TaskTemplate.Admin?.email,
-                type: "admin",
-              },
-        }
-      : null;
+    // Format recurring tasks data
+    const recurringDatesData = recurringTasks.map(task => ({
+      taskId: task.id,
+      dueDate: task.dueDate,
+      dueTime: task.dueTime,
+      description: task.description,
+      status: task.status,
+      recurrence: task.recurrence,
+      isRecurring: task.isRecurring,
+      rewardCoins: task.rewardCoins,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+      completedAt: task.completedAt,
+      approvedAt: task.approvedAt,
+      rejectedAt: task.rejectedAt,
+    }));
+
+    // Get the most recent task's dueTime (or first one if available)
+    const selectedDueTime = recurringTasks.length > 0 ? recurringTasks[0].dueTime : null;
+    const selectedDescription = recurringTasks.length > 0 ? recurringTasks[0].description : null;
 
     return res.status(200).json({
       success: true,
-      message: "Task and template details fetched successfully",
+      message: "Task template with recurring dates fetched successfully",
       data: {
-        task: taskData,
         template: templateData,
+        child: childData,
+        selectedDueTime: selectedDueTime,
+        selectedDescription: selectedDescription,
+        recurringDates: recurringDatesData,
+        totalRecurringTasks: recurringTasks.length,
       },
     });
   } catch (error) {
-    console.error("Error fetching task with template details:", error);
+    console.error("Error fetching task template with recurring dates:", error);
     return next(
-      new ErrorHandler(error.message || "Failed to fetch task details", 500)
+      new ErrorHandler(error.message || "Failed to fetch task template details", 500)
     );
   }
 });
@@ -1577,6 +1589,7 @@ const updateTaskTemplateAndTasks = asyncHandler(async (req, res, next) => {
     );
   }
 });
+
 //----------------Mark task as completed (Child only)-------------------------
 const updateTaskStatus = asyncHandler(async (req, res, next) => {
   const { taskId } = req.params;
@@ -1896,7 +1909,7 @@ const updateTaskStatus = asyncHandler(async (req, res, next) => {
   }
 });
 
-// Update task reward coins (Parent only)
+//----------------Update task reward coins (Parent only)---------------------------------------
 const updateTaskReward = asyncHandler(async (req, res, next) => {
   const { rewardCoins } = req.body;
 
@@ -2215,7 +2228,7 @@ module.exports = {
   listTasks,
   getTasksByTemplateId,
   updateTaskTemplateAndTasks,
-  getTaskWithTemplateDetails,
+  getTaskTemplateWithRecurringDates,
   updateTaskStatus,
   updateTaskReward,
   deleteTasksByTemplate,
