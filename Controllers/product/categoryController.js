@@ -119,12 +119,13 @@ const getAllCategories = asyncHandler(async (req, res, next) => {
       limit = 10,
       search,
       is_active,
-      parent_id,
       include_products = false,
     } = req.query;
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
-    const whereClause = {};
+    const whereClause = {
+      parentId: null // Only fetch parent categories (those without a parent)
+    };
 
     // Search filter
     if (search) {
@@ -139,28 +140,35 @@ const getAllCategories = asyncHandler(async (req, res, next) => {
       whereClause.is_active = is_active === "true";
     }
 
-    // Parent category filter
-    if (parent_id) {
-      whereClause.parentId = parent_id === "null" ? null : parent_id;
-    }
-
     const includeOptions = [];
 
-    // Include subcategories
-    includeOptions.push({
+    // Include subcategories with their own subcategories (recursive)
+    const subcategoryInclude = {
       model: Category,
       as: "subcategories",
       required: false,
-    });
+      include: [
+        {
+          model: Category,
+          as: "subcategories", // Nested subcategories
+          required: false,
+        }
+      ]
+    };
 
-    // Include parent category
-    includeOptions.push({
-      model: Category,
-      as: "parent",
-      required: false,
-    });
+    // Add products to subcategories if requested
+    if (include_products === "true") {
+      subcategoryInclude.include.push({
+        model: Product,
+        as: "products",
+        required: false,
+        attributes: ["id", "name", "status"],
+      });
+    }
 
-    // Include products if requested
+    includeOptions.push(subcategoryInclude);
+
+    // Include products in parent category if requested
     if (include_products === "true") {
       includeOptions.push({
         model: Product,
@@ -176,11 +184,12 @@ const getAllCategories = asyncHandler(async (req, res, next) => {
       limit: parseInt(limit),
       offset: offset,
       order: [["createdAt", "DESC"]],
+      distinct: true, // Ensures count is accurate when using includes
     });
 
     const totalPages = Math.ceil(count / parseInt(limit));
 
-   return res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: {
         categories,
