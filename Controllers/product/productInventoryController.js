@@ -243,12 +243,19 @@ const createInventory = asyncHandler(async (req, res, next) => {
         const variantInclude = {
           model: ProductVariant,
           as: "variant",
-          attributes: ["id", "price", "compare_at_price", "weight"],
+          attributes: ["id", "price", "compare_at_price", "weight","attributes","barcode"],
           include: [
             {
               model: Product,
               as: "product",
               attributes: ["id", "name", "status", "type", "vendor"],
+              include: [
+                {
+                  model: Category,
+                  as: "category",
+                  attributes: ["id", "name"],
+                },
+              ],
             },
           ],
         };
