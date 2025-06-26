@@ -589,7 +589,6 @@ const deleteProduct = asyncHandler(async (req, res, next) => {
 
   try {
     const { id } = req.params;
-    const { force = false } = req.query;
 
     if (!id) {
       await transaction.rollback();
@@ -627,7 +626,7 @@ const deleteProduct = asyncHandler(async (req, res, next) => {
         if (product.variants && product.variants.length > 0) {
           for (const variant of product.variants) {
             if (variant.inventories && variant.inventories.length > 0) {
-              await Inventory.destroy({
+              await ProductInventory.destroy({
                 where: { variant_id: variant.id },
                 transaction
               });
