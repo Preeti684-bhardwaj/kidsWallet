@@ -10,6 +10,51 @@ const {
   validateSpecifications,
 } = require("../../Validators/productValidation");
 
+// Helper function to extract filename from URL
+const extractFilenameFromUrl = (url) => {
+  try {
+    const urlParts = url.split('/');
+    return urlParts[urlParts.length - 1];
+  } catch (error) {
+    console.error('Error extracting filename from URL:', error);
+    return null;
+  }
+};
+
+// Helper function to delete multiple files from CDN
+const deleteMultipleFiles = async (filesToDelete) => {
+  const deletePromises = filesToDelete.map(async (file) => {
+    try {
+      let filename;
+      
+      // If it's a URL object with filename property
+      if (typeof file === 'object' && file.filename) {
+        filename = file.filename;
+      }
+      // If it's a URL object with url property
+      else if (typeof file === 'object' && file.url) {
+        filename = extractFilenameFromUrl(file.url);
+      }
+      // If it's a string URL
+      else if (typeof file === 'string') {
+        filename = extractFilenameFromUrl(file);
+      }
+      
+      if (filename) {
+        await deleteFile(filename);
+        console.log(`Successfully deleted file: ${filename}`);
+      }
+    } catch (error) {
+      console.error(`Failed to delete file:`, error);
+      // Don't throw here - we want to continue deleting other files
+    }
+  });
+  
+  await Promise.allSettled(deletePromises);
+};
+
+
+
 // Create Product
 const createProduct = asyncHandler(async (req, res, next) => {
   const transaction = await models.db.sequelize.transaction();
@@ -572,69 +617,36 @@ const deleteProduct = asyncHandler(async (req, res, next) => {
       return next(new ErrorHandler("Product not found", 404));
     }
 
-    // Check for dependencies
-    if (!force) {
-      if (product.variants && product.variants.length > 0) {
-        const hasInventory = product.variants.some(
-          (variant) => variant.inventories && variant.inventories.length > 0
-        );
+    // Delete images from CDN before deleting the product
+    if (product.images && product.images.length > 0) {
+      console.log('Deleting product images from CDN...');
+      await deleteMultipleFiles(product.images);
+    }
 
-        if (hasInventory) {
-          await transaction.rollback();
-          return res.status(409).json({
-            success: false,
-            message:
-              "Cannot delete product with inventory records. Use force=true to cascade delete.",
-            variants: product.variants.length,
-            hasInventory: true,
+     // Delete associated inventories first (cascade from variants)
+        if (product.variants && product.variants.length > 0) {
+          for (const variant of product.variants) {
+            if (variant.inventories && variant.inventories.length > 0) {
+              await Inventory.destroy({
+                where: { variant_id: variant.id },
+                transaction
+              });
+            }
+          }
+          
+          // Delete product variants
+          await ProductVariant.destroy({
+            where: { product_id: id },
+            transaction
           });
         }
-
-        await transaction.rollback();
-        return res.status(409).json({
-          success: false,
-          message:
-            "Cannot delete product with variants. Use force=true to cascade delete.",
-          variants: product.variants.length,
-        });
-      }
-    }
-
-    // Archive instead of hard delete for active products (soft delete approach)
-    if (product.status === "active" && !force) {
-      await product.update({ status: "archived" }, { transaction });
-      await transaction.commit();
-
-      return res.status(200).json({
-        success: true,
-        message:
-          "Product archived successfully (use force=true for permanent deletion)",
-        data: { status: "archived" },
-      });
-    }
-
-    // Delete associated images
-    if (product.images && product.images.length > 0) {
-      for (const image of product.images) {
-        if (image.filename) {
-          try {
-            await deleteFile(image.filename);
-          } catch (deleteError) {
-            console.warn(
-              `Failed to delete product image ${image.filename}:`,
-              deleteError.message
-            );
-          }
-        }
-      }
-    }
 
     await product.destroy({ transaction });
     await transaction.commit();
 
     return res.status(200).json({
       success: true,
-      message: "Product deleted successfully",
+      message: "Product and all associated variants, inventories, and images deleted successfully",
     });
   } catch (error) {
     await transaction.rollback();

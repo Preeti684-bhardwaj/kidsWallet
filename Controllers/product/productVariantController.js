@@ -9,6 +9,49 @@ const {
 } = require("../../Validators/productVariantValidation");
 const { Product, ProductVariant, ProductInventory, ProductLocation } = models;
 
+// Helper function to extract filename from URL
+const extractFilenameFromUrl = (url) => {
+  try {
+    const urlParts = url.split('/');
+    return urlParts[urlParts.length - 1];
+  } catch (error) {
+    console.error('Error extracting filename from URL:', error);
+    return null;
+  }
+};
+
+// Helper function to delete multiple files from CDN
+const deleteMultipleFiles = async (filesToDelete) => {
+  const deletePromises = filesToDelete.map(async (file) => {
+    try {
+      let filename;
+      
+      // If it's a URL object with filename property
+      if (typeof file === 'object' && file.filename) {
+        filename = file.filename;
+      }
+      // If it's a URL object with url property
+      else if (typeof file === 'object' && file.url) {
+        filename = extractFilenameFromUrl(file.url);
+      }
+      // If it's a string URL
+      else if (typeof file === 'string') {
+        filename = extractFilenameFromUrl(file);
+      }
+      
+      if (filename) {
+        await deleteFile(filename);
+        console.log(`Successfully deleted file: ${filename}`);
+      }
+    } catch (error) {
+      console.error(`Failed to delete file:`, error);
+      // Don't throw here - we want to continue deleting other files
+    }
+  });
+  
+  await Promise.allSettled(deletePromises);
+};
+
 // Create Product Variant
 const createProductVariant = asyncHandler(async (req, res, next) => {
   const transaction = await models.db.sequelize.transaction();
@@ -555,7 +598,6 @@ const deleteProductVariant = asyncHandler(async (req, res, next) => {
 
   try {
     const { id } = req.params;
-    const { force = false } = req.query;
 
     if (!id) {
       await transaction.rollback();
@@ -563,6 +605,7 @@ const deleteProductVariant = asyncHandler(async (req, res, next) => {
     }
 
     const variant = await ProductVariant.findByPk(id, {
+      attributes: ['id', 'images'],
       include: [
         {
           model: ProductInventory,
@@ -577,52 +620,21 @@ const deleteProductVariant = asyncHandler(async (req, res, next) => {
       return next(new ErrorHandler("Product variant not found", 404));
     }
 
-    // Check for dependencies
-    if (!force && variant.inventories && variant.inventories.length > 0) {
-      await transaction.rollback();
-      return res.status(409).json({
-        success: false,
-        message:
-          "Cannot delete variant with inventory records. Use force=true to cascade delete.",
-        inventoryCount: variant.inventories.length,
-      });
-    }
-
-    // Soft delete (deactivate) instead of hard delete for active variants
-    if (variant.is_active && !force) {
-      await variant.update({ is_active: false }, { transaction });
-      await transaction.commit();
-
-      return res.status(200).json({
-        success: true,
-        message:
-          "Product variant deactivated successfully (use force=true for permanent deletion)",
-        data: { is_active: false },
-      });
-    }
-
-    // Delete associated images
-    if (variant.images && variant.images.length > 0) {
-      for (const image of variant.images) {
-        if (image.filename) {
-          try {
-            await deleteFile(image.filename);
-          } catch (deleteError) {
-            console.warn(
-              `Failed to delete variant image ${image.filename}:`,
-              deleteError.message
-            );
-          }
-        }
-      }
-    }
-
+       // Count images for the response message
+       const imageCount = variant.images ? variant.images.length : 0;
+    
+       // Delete images from CDN before deleting the variant
+       if (variant.images && variant.images.length > 0) {
+         console.log('Deleting variant images from CDN...');
+         await deleteMultipleFiles(variant.images);
+       }
+   
     await variant.destroy({ transaction });
     await transaction.commit();
 
     return res.status(200).json({
       success: true,
-      message: "Product variant deleted successfully",
+      message: `Variant deleted successfully. ${imageCount} images deleted from CDN.`,
     });
   } catch (error) {
     if (transaction && !transaction.finished) {
