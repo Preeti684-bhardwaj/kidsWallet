@@ -12,6 +12,7 @@ const allowedOrigins = [
     // "https://xplore-instant.vercel.app",
     // "https://pre.xplore.xircular.io",
     "http://localhost:5173",
+    "https://market-management-tool.vercel.app"
     // "https://xplr.live"
 ];
 // Configure CORS middleware
