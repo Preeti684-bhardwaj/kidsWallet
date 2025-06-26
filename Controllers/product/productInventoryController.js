@@ -465,7 +465,6 @@ const createInventory = asyncHandler(async (req, res, next) => {
   
     try {
       const { id } = req.params;
-      const { force = false } = req.query;
   
       if (!id) {
         await transaction.rollback();
@@ -478,31 +477,31 @@ const createInventory = asyncHandler(async (req, res, next) => {
         return next(new ErrorHandler("Inventory not found", 404));
       }
   
-      // Check if inventory has reserved quantity
-      if (inventory.reservedQuantity > 0 && !force) {
-        await transaction.rollback();
-        return res.status(409).json({
-          success: false,
-          message: "Cannot delete inventory with reserved quantity. Use force=true to proceed.",
-          data: {
-            reservedQuantity: inventory.reservedQuantity,
-            totalQuantity: inventory.quantity,
-          },
-        });
-      }
+      // // Check if inventory has reserved quantity
+      // if (inventory.reservedQuantity > 0 && !force) {
+      //   await transaction.rollback();
+      //   return res.status(409).json({
+      //     success: false,
+      //     message: "Cannot delete inventory with reserved quantity. Use force=true to proceed.",
+      //     data: {
+      //       reservedQuantity: inventory.reservedQuantity,
+      //       totalQuantity: inventory.quantity,
+      //     },
+      //   });
+      // }
   
-      // Check if inventory has available quantity
-      if (inventory.quantity > 0 && !force) {
-        await transaction.rollback();
-        return res.status(409).json({
-          success: false,
-          message: "Cannot delete inventory with available quantity. Use force=true to proceed.",
-          data: {
-            availableQuantity: inventory.quantity - inventory.reservedQuantity,
-            totalQuantity: inventory.quantity,
-          },
-        });
-      }
+      // // Check if inventory has available quantity
+      // if (inventory.quantity > 0 && !force) {
+      //   await transaction.rollback();
+      //   return res.status(409).json({
+      //     success: false,
+      //     message: "Cannot delete inventory with available quantity. Use force=true to proceed.",
+      //     data: {
+      //       availableQuantity: inventory.quantity - inventory.reservedQuantity,
+      //       totalQuantity: inventory.quantity,
+      //     },
+      //   });
+      // }
   
       await inventory.destroy({ transaction });
       await transaction.commit();
