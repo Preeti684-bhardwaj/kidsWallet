@@ -6,7 +6,7 @@ const Notification = sequelize.define('Notification', {
       primaryKey: true
     },
     type: {
-      type: DataTypes.ENUM('task_reminder','task_update', 'task_deletion','task_rejection','task_completion','reward_update', 'task_approval', 'streak_bonus','blog_approval', 'achievement', 'follower_request'),
+      type: DataTypes.ENUM('task_reminder','task_update', 'task_deletion','task_rejection','task_completion','reward_update', 'task_approval','goal_assigned', 'streak_bonus','blog_approval', 'achievement', 'follower_request'),
       allowNull: false
     },
     message: {
@@ -26,7 +26,7 @@ const Notification = sequelize.define('Notification', {
       defaultValue: false
     },
     relatedItemType: {
-      type: DataTypes.ENUM('task', 'blog', 'quiz', 'achievement', 'follower'),
+      type: DataTypes.ENUM('task', 'goal','blog', 'quiz', 'achievement', 'follower'),
       allowNull: true
     },
     relatedItemId: {

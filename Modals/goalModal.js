@@ -1,77 +1,68 @@
-// module.exports = (sequelize, DataTypes) => {
-//   const Goal = sequelize.define('Goal', {
-//     id: {
-//       type: DataTypes.UUID,
-//       defaultValue: DataTypes.UUIDV4,
-//       primaryKey: true
-//     },
-//     dueDate: {
-//       type: DataTypes.DATE,                               
-//       allowNull: true
-//     },
-//     dueTime: {
-//       type: DataTypes.STRING, // Store as "HH:MM" format
-//       allowNull: true,
-//       validate: {
-//         is: /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/
-//       }
-//     },
-//     duration: {
-//       type: DataTypes.INTEGER, // Duration in minutes
-//       allowNull: false,
-//       validate: {
-//         min: { args: 1, msg: 'Duration must be at least 1 minute' },
-//       },
-//     },
-//     type: {
-//       type: DataTypes.ENUM('TASK', 'COIN'),
-//       allowNull: false,
-//     },
-//     recurrence: {
-//       type: DataTypes.ENUM('ONCE', 'DAILY', 'WEEKLY', 'MONTHLY'),
-//       allowNull: false,
-//     },
-//     status: {
-//       type: DataTypes.ENUM('UPCOMING','PENDING', 'COMPLETED', 'APPROVED', 'REJECTED', 'OVERDUE'),
-//       defaultValue: 'PENDING',
-//     },
-//     rewardCoins: {
-//       type: DataTypes.INTEGER,
-//       allowNull: false,
-//       defaultValue: 0,
-//       // validate: {
-//       //   min: { args: 0, msg: 'Reward coins cannot be negative' },
-//       // },
-//     },
-//     difficulty: {
-//       type: DataTypes.ENUM('EASY', 'MEDIUM', 'HARD'),
-//       allowNull: false,
-//       defaultValue: 'EASY',
-//     },
-//     isRecurring: {
-//       type: DataTypes.BOOLEAN,
-//       defaultValue: false
-//     },
-//     completedAt: {
-//       type: DataTypes.DATE,
-//       allowNull: true
-//     },
-//     approvedAt: {
-//       type: DataTypes.DATE,
-//       allowNull: true
-//     },
-//     rejectedAt: {
-//       type: DataTypes.DATE,
-//       allowNull: true
-//     },
-//     rejectionReason: {
-//       type: DataTypes.TEXT,
-//       allowNull: true
-//     },
-//   },
-//   {
-//     timestamps: true,
-//   });
-  
-//   return Goal;
-// }
+module.exports = (sequelize, DataTypes) => {
+  const Goal = sequelize.define(
+    "Goal",
+    {
+      id: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true,
+      },
+      title: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        validate: {
+          notEmpty: { msg: "Title cannot be empty" },
+          len: {
+            args: [2, 100],
+            msg: "Title must be between 2 and 100 characters",
+          },
+        },
+      },
+      description: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      image: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        // validate: {
+        //   isUrl: { msg: 'Image must be a valid URL' },
+        // },
+      },
+      type: {
+        type: DataTypes.ENUM("TASK", "COIN"),
+        allowNull: false,
+      },
+      status: {
+        type: DataTypes.ENUM(
+          "PENDING",
+          "COMPLETED",
+          "APPROVED",
+          "REJECTED"
+        ),
+        defaultValue: "PENDING",
+      },
+      completedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      approvedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      rejectedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      rejectionReason: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+    },
+    {
+      timestamps: true,
+    }
+  );
+
+  return Goal;
+};

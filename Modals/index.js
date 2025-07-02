@@ -10,7 +10,7 @@ const models = {
     TaskTemplate: require('./taskTemplateModal')(db.sequelize, db.Sequelize.DataTypes),
     Task: require('./taskModal')(db.sequelize, db.Sequelize.DataTypes),
     // GoalTemplate: require('./goalTemplateModal')(db.sequelize, db.Sequelize.DataTypes),
-    // Goal: require('./goalModal')(db.sequelize, db.Sequelize.DataTypes),
+    Goal: require('./goalModal')(db.sequelize, db.Sequelize.DataTypes),
     Notification: require('./notificationModal')(db.sequelize, db.Sequelize.DataTypes),
     Blog: require('./blogModal')(db.sequelize, db.Sequelize.DataTypes),
     Category: require('./product/categoryModal')(db.sequelize, db.Sequelize.DataTypes),
@@ -139,6 +139,39 @@ models.ProductInventory.belongsTo(models.ProductLocation, {
     foreignKey: "location_id",
     as: "inventories",
   });
+
+//----------------GOAL RELATIONSHIPS------------------------------------------------------------
+// Child ↔ Goal (One-to-Many: Each goal belongs to one child, child can have many goals)
+models.Child.hasMany(models.Goal, { foreignKey: 'childId', as: 'goals', onDelete: 'CASCADE', hooks: true });
+models.Goal.belongsTo(models.Child, { foreignKey: 'childId', as: 'child' });
+
+// Goal ↔ Product (Many-to-Many: Goals can have multiple products, products can be in multiple goals)
+models.Goal.belongsToMany(models.Product, {
+  through: "GoalProduct", // Junction table name
+  foreignKey: "goal_id",
+  otherKey: "product_id",
+  as: 'products'
+});
+models.Product.belongsToMany(models.Goal, {
+  through: "GoalProduct", // Junction table name
+  foreignKey: "product_id",
+  otherKey: "goal_id",
+  as: 'goals'
+});
+
+// Goal ↔ Task (Many-to-Many: Goals can have multiple tasks, tasks can be in multiple goals)
+models.Goal.belongsToMany(models.Task, {
+  through: "GoalTask", // Junction table name
+  foreignKey: "goal_id",
+  otherKey: "task_id",
+  as: 'tasks'
+});
+models.Task.belongsToMany(models.Goal, {
+  through: "GoalTask", // Junction table name
+  foreignKey: "task_id",
+  otherKey: "goal_id",
+  as: 'goals'
+});
 
 models.db = db;
 module.exports = models;

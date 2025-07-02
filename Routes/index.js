@@ -39,6 +39,7 @@ const childRouter = require("./childRoutes");
 const taskRouter = require("./taskRoutes");
 const adminRouter = require("./adminRoutes");
 const productRouter = require("./productRoutes");
+const goalRouter = require("./goalRoutes");
 const {listFiles,deleteFile}=require("../Utils/cdnImplementation")
 // const blogRouter = require("./blogRoutes");
 
@@ -50,6 +51,7 @@ app.use("/admin", adminRouter);
 app.use("/product", productRouter);
 // app.use("/blog", blogRouter);
 app.use("/task", taskRouter);
+app.use("/goal", goalRouter);
 app.get('/list_files', asyncHandler(async (req, res,next) => {
     try {
       const cdnFiles = await listFiles();
@@ -91,6 +93,8 @@ app.get('/list_files', asyncHandler(async (req, res,next) => {
       return next(new ErrorHandler(`Deletion failed: ${error.message}`,500));
     }
   }));
+
+
 // Middleware for error
 app.use(errorMiddleware);
 
