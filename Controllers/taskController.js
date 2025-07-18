@@ -2145,7 +2145,7 @@ const deleteTasksByTemplate = asyncHandler(async (req, res, next) => {
   }
 });
 
-// Delete a task (Parent only)
+//---------------Delete a task (Parent only)--------------------------
 const deleteTask = asyncHandler(async (req, res, next) => {
   try {
     const task = await models.Task.findOne({
@@ -2220,6 +2220,303 @@ const deleteTask = asyncHandler(async (req, res, next) => {
   }
 });
 
+//------------------analytics chores---------------------------------
+const getTaskTemplateAnalytics = asyncHandler(async (req, res, next) => {
+  const { taskTemplateId } = req.params;
+  const { timeline = 'days', startDate, endDate } = req.query; // timeline: 'days', 'weeks', 'months'
+
+  try {
+    // Validate taskTemplateId
+    if (!isValidUUID(taskTemplateId)) {
+      return next(new ErrorHandler("Invalid taskTemplateId. Must be a valid UUID", 400));
+    }
+
+    // Validate timeline parameter
+    const validTimelines = ['days', 'weeks', 'months'];
+    if (!validTimelines.includes(timeline)) {
+      return next(new ErrorHandler("Invalid timeline. Must be 'days', 'weeks', or 'months'", 400));
+    }
+
+    // Validate date range if provided
+    let dateFilter = {};
+    if (startDate || endDate) {
+      const start = startDate ? moment(startDate) : null;
+      const end = endDate ? moment(endDate) : null;
+
+      if (start && !start.isValid()) {
+        return next(new ErrorHandler("Invalid startDate format. Use YYYY-MM-DD", 400));
+      }
+      if (end && !end.isValid()) {
+        return next(new ErrorHandler("Invalid endDate format. Use YYYY-MM-DD", 400));
+      }
+      if (start && end && start.isAfter(end)) {
+        return next(new ErrorHandler("startDate cannot be after endDate", 400));
+      }
+
+      // Build date filter for completedAt
+      if (start) dateFilter.completedAt = { ...dateFilter.completedAt, [Op.gte]: start.toDate() };
+      if (end) dateFilter.completedAt = { ...dateFilter.completedAt, [Op.lte]: end.endOf('day').toDate() };
+    }
+
+    // Fetch the task template
+    const taskTemplate = await models.TaskTemplate.findByPk(taskTemplateId);
+    if (!taskTemplate) {
+      return next(new ErrorHandler("Task template not found", 404));
+    }
+
+    // Build where clause for tasks
+    const taskWhereClause = { 
+      taskTemplateId,
+      ...dateFilter 
+    };
+
+    // Fetch all tasks for the task template
+    const tasks = await models.Task.findAll({
+      where: taskWhereClause,
+      include: [
+        {
+          model: models.Child,
+          attributes: ["id", "age"],
+          required: false, // LEFT JOIN to include tasks without children
+        },
+      ],
+    });
+
+    if (tasks.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No tasks found for this task template",
+        data: {
+          completionRate: 0,
+          averageCompletionTime: null,
+          rejectionRate: 0,
+          timeline: {
+            type: timeline,
+            data: [],
+            summary: {
+              totalPeriods: 0,
+              mostActiveLabel: null,
+              mostActiveCount: 0,
+              leastActiveLabel: null,
+              leastActiveCount: 0
+            }
+          },
+          usageByAgeGroup: [],
+          totalTasks: 0,
+          completedTasks: 0,
+          rejectedTasks: 0,
+          pendingTasks: 0,
+          approvedTasks: 0,
+          overdueeTasks: 0
+        },
+      });
+    }
+
+    // Initialize analytics variables
+    let completedTasks = 0;
+    let rejectedTasks = 0;
+    let pendingTasks = 0;
+    let approvedTasks = 0;
+    let overdueTasks = 0;
+    let totalCompletionTime = 0;
+    let completionTimesCount = 0;
+    const timelineCounts = new Map();
+    const ageGroupCounts = new Map();
+
+    // Process each task
+    tasks.forEach((task) => {
+      const { status, completedAt, createdAt, dueDate, Child } = task;
+
+      // Count by status
+      switch (status) {
+        case "COMPLETED":
+          completedTasks++;
+          break;
+        case "APPROVED":
+          approvedTasks++;
+          break;
+        case "REJECTED":
+          rejectedTasks++;
+          break;
+        case "PENDING":
+          pendingTasks++;
+          break;
+        case "OVERDUE":
+          overdueTasks++;
+          break;
+      }
+
+      // Calculate completion metrics for completed and approved tasks
+      if (status === "COMPLETED" || status === "APPROVED") {
+        const completionDate = completedAt || createdAt;
+        
+        if (completionDate) {
+          // Average completion time calculation
+          if (dueDate) {
+            const completionTime = moment(completionDate).diff(moment(dueDate), "minutes");
+            totalCompletionTime += Math.abs(completionTime); // Use absolute value for meaningful average
+            completionTimesCount++;
+          }
+
+          // Timeline analysis based on completion date
+          const dateMoment = moment(completionDate);
+          let timelineKey;
+          let timelineLabel;
+
+          switch (timeline) {
+            case 'days':
+              timelineKey = dateMoment.format('YYYY-MM-DD');
+              timelineLabel = dateMoment.format('dddd, MMM DD');
+              break;
+            case 'weeks':
+              const weekStart = dateMoment.clone().startOf('isoWeek');
+              const weekEnd = dateMoment.clone().endOf('isoWeek');
+              timelineKey = `${dateMoment.isoWeekYear()}-W${dateMoment.isoWeek()}`;
+              timelineLabel = `Week ${dateMoment.isoWeek()}, ${dateMoment.isoWeekYear()} (${weekStart.format('MMM DD')} - ${weekEnd.format('MMM DD')})`;
+              break;
+            case 'months':
+              timelineKey = dateMoment.format('YYYY-MM');
+              timelineLabel = dateMoment.format('MMMM YYYY');
+              break;
+          }
+
+          if (timelineKey && timelineLabel) {
+            const current = timelineCounts.get(timelineKey) || { 
+              key: timelineKey, 
+              label: timelineLabel, 
+              count: 0,
+              date: dateMoment.toDate() // For sorting
+            };
+            current.count += 1;
+            timelineCounts.set(timelineKey, current);
+          }
+        }
+      }
+
+      // Usage by age group analysis
+      if (Child && Child.age !== null && Child.age !== undefined) {
+        const age = parseInt(Child.age);
+        if (!isNaN(age) && age >= 0) {
+          const ageGroupStart = Math.floor(age / 5) * 5;
+          const ageGroupEnd = ageGroupStart + 4;
+          const ageGroupKey = `${ageGroupStart}-${ageGroupEnd}`;
+          
+          const current = ageGroupCounts.get(ageGroupKey) || {
+            ageGroup: ageGroupKey,
+            minAge: ageGroupStart,
+            maxAge: ageGroupEnd,
+            count: 0
+          };
+          current.count += 1;
+          ageGroupCounts.set(ageGroupKey, current);
+        }
+      }
+    });
+
+    // Calculate analytics
+    const totalTasks = tasks.length;
+    const completionRate = totalTasks > 0 ? parseFloat(((completedTasks + approvedTasks) / totalTasks * 100).toFixed(2)) : 0;
+    const rejectionRate = totalTasks > 0 ? parseFloat((rejectedTasks / totalTasks * 100).toFixed(2)) : 0;
+    const averageCompletionTime = completionTimesCount > 0 ? parseFloat((totalCompletionTime / completionTimesCount).toFixed(2)) : null;
+
+    // Process timeline data
+    const timelineData = Array.from(timelineCounts.values())
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .map(item => ({
+        key: item.key,
+        label: item.label,
+        count: item.count,
+        percentage: totalTasks > 0 ? parseFloat((item.count / totalTasks * 100).toFixed(2)) : 0
+      }));
+
+    // Timeline summary
+    const timelineSummary = {
+      totalPeriods: timelineData.length,
+      mostActiveLabel: null,
+      mostActiveCount: 0,
+      leastActiveLabel: null,
+      leastActiveCount: 0
+    };
+
+    if (timelineData.length > 0) {
+      const sortedByCount = [...timelineData].sort((a, b) => b.count - a.count);
+      timelineSummary.mostActiveLabel = sortedByCount[0].label;
+      timelineSummary.mostActiveCount = sortedByCount[0].count;
+      timelineSummary.leastActiveLabel = sortedByCount[sortedByCount.length - 1].label;
+      timelineSummary.leastActiveCount = sortedByCount[sortedByCount.length - 1].count;
+    }
+
+    // Process age group data
+    const usageByAgeGroup = Array.from(ageGroupCounts.values())
+      .sort((a, b) => a.minAge - b.minAge)
+      .map(item => ({
+        ageGroup: item.ageGroup,
+        count: item.count,
+        percentage: totalTasks > 0 ? parseFloat((item.count / totalTasks * 100).toFixed(2)) : 0
+      }));
+
+    // Return comprehensive analytics
+    return res.status(200).json({
+      success: true,
+      message: "Task template analytics fetched successfully",
+      data: {
+        // Core metrics
+        completionRate,
+        averageCompletionTime,
+        rejectionRate,
+        
+        // Timeline data with filtering
+        timeline: {
+          type: timeline,
+          data: timelineData,
+          summary: timelineSummary,
+          dateRange: {
+            startDate: startDate || null,
+            endDate: endDate || null
+          }
+        },
+        
+        // Age group analysis
+        usageByAgeGroup,
+        
+        // Task status breakdown
+        taskBreakdown: {
+          totalTasks,
+          completedTasks,
+          approvedTasks,
+          rejectedTasks,
+          pendingTasks,
+          overdueTasks,
+          statusDistribution: {
+            completed: totalTasks > 0 ? parseFloat((completedTasks / totalTasks * 100).toFixed(2)) : 0,
+            approved: totalTasks > 0 ? parseFloat((approvedTasks / totalTasks * 100).toFixed(2)) : 0,
+            rejected: totalTasks > 0 ? parseFloat((rejectedTasks / totalTasks * 100).toFixed(2)) : 0,
+            pending: totalTasks > 0 ? parseFloat((pendingTasks / totalTasks * 100).toFixed(2)) : 0,
+            overdue: totalTasks > 0 ? parseFloat((overdueTasks / totalTasks * 100).toFixed(2)) : 0
+          }
+        },
+        
+        // Metadata
+        taskTemplate: {
+          id: taskTemplate.id,
+          title: taskTemplate.title,
+          image: taskTemplate.image
+        },
+        
+        // Query parameters used
+        filters: {
+          timeline,
+          startDate: startDate || null,
+          endDate: endDate || null
+        }
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching task template analytics:", error);
+    return next(new ErrorHandler(error.message || "Failed to fetch analytics", 500));
+  }
+});
+
 module.exports = {
   createTaskTemplate,
   getAllTaskTemplate,
@@ -2232,6 +2529,7 @@ module.exports = {
   updateTaskReward,
   deleteTasksByTemplate,
   deleteTask,
+  getTaskTemplateAnalytics,
 };
 
 // getChildTasks,

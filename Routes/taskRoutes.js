@@ -9,6 +9,7 @@ const {
     updateTaskStatus,
     updateTaskTemplateAndTasks,
     getTaskTemplateWithRecurringDates,
+    getTaskTemplateAnalytics,
     // updateTaskReward,
     deleteTasksByTemplate,
     deleteTask,
@@ -39,6 +40,7 @@ router.delete("/delete/:taskId", authenticateToken, deleteTask);
 router.delete("/child/:childId/template/:templateId", authenticateToken, deleteTasksByTemplate);
 // router.get("/analytics", authenticateToken, getTaskAnalytics);
 router.get("/list", authenticateUnifiedToken, listTasks);
-// // router.use('/', taskController.router);
+router.get("/task-template/:taskTemplateId/analytics", authenticateToken , getTaskTemplateAnalytics);
+// // router.use('/', taskControltaskController.router);
 
 module.exports = router;

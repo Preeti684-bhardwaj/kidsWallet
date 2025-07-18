@@ -1040,15 +1040,339 @@ const deleteGoal = asyncHandler(async (req, res, next) => {
   }
 });
 
-// analytics of goals based on child 
-const getGoalAnalytics = asyncHandler(async (req, res, next) => {
-  try {
-    const { childId } = req.query;
-    const { timeframe = 'all', startDate, endDate } = req.query;
+//-----------------analytics of goals based on child------------------------------------------- 
+// const getGoalAnalytics = asyncHandler(async (req, res, next) => {
+//   try {
+//     const { childId } = req.query;
+//     const { timeframe = 'all', startDate, endDate } = req.query;
 
-    // Only parents can access analytics
-    if (!req.parent) {
-      return next(new ErrorHandler("Only parents can access goal analytics", 403));
+//     // Only parents can access analytics
+//     if (!req.parent) {
+//       return next(new ErrorHandler("Only parents can access goal analytics", 403));
+//     }
+
+//     // Validate childId if provided
+//     if (childId && !isValidUUID(childId)) {
+//       return next(new ErrorHandler("Invalid childId. Must be a valid UUID", 400));
+//     }
+
+//     // Build where conditions for goals
+//     let goalWhereConditions = {};
+//     let dateFilter = {};
+
+//     // Date filtering
+//     if (timeframe !== 'all') {
+//       const now = new Date();
+//       switch (timeframe) {
+//         case 'week':
+//           dateFilter.createdAt = {
+//             [Op.gte]: new Date(now.setDate(now.getDate() - 7))
+//           };
+//           break;
+//         case 'month':
+//           dateFilter.createdAt = {
+//             [Op.gte]: new Date(now.setMonth(now.getMonth() - 1))
+//           };
+//           break;
+//         case 'quarter':
+//           dateFilter.createdAt = {
+//             [Op.gte]: new Date(now.setMonth(now.getMonth() - 3))
+//           };
+//           break;
+//         case 'year':
+//           dateFilter.createdAt = {
+//             [Op.gte]: new Date(now.setFullYear(now.getFullYear() - 1))
+//           };
+//           break;
+//         case 'custom':
+//           if (startDate && endDate) {
+//             dateFilter.createdAt = {
+//               [Op.between]: [new Date(startDate), new Date(endDate)]
+//             };
+//           }
+//           break;
+//       }
+//     }
+
+//     // Get parent's children
+//     const children = await models.Child.findAll({
+//       where: { 
+//         parentId: req.parent.obj.id,
+//         ...(childId ? { id: childId } : {})
+//       },
+//       attributes: ['id', 'name', 'createdAt'],
+//       include: [
+//         {
+//           model: models.Goal,
+//           as: 'goals',
+//           where: dateFilter,
+//           required: false,
+//           include: [
+//             {
+//               model: models.Product,
+//               as: 'products',
+//               attributes: ['id', 'name'],
+//               through: { attributes: [] },
+//               required: false,
+//               include: [
+//                 {
+//                   model: models.ProductVariant,
+//                   as: 'variants',
+//                   attributes: ['price', 'compare_at_price'],
+//                   where: { is_active: true },
+//                   required: false,
+//                 }
+//               ]
+//             },
+//             {
+//               model: models.Task,
+//               as: 'tasks',
+//               attributes: ['id', 'status'],
+//               through: { attributes: [] },
+//               required: false,
+//             }
+//           ]
+//         }
+//       ]
+//     });
+
+//     if (!children || children.length === 0) {
+//       return next(new ErrorHandler("No children found", 404));
+//     }
+
+//     // Process analytics for each child
+//     const analyticsData = children.map(child => {
+//       const goals = child.goals || [];
+      
+//       // Basic goal statistics
+//       const totalGoals = goals.length;
+//       const pendingGoals = goals.filter(g => g.status === 'PENDING').length;
+//       const completedGoals = goals.filter(g => g.status === 'COMPLETED').length;
+//       const approvedGoals = goals.filter(g => g.status === 'APPROVED').length;
+//       const rejectedGoals = goals.filter(g => g.status === 'REJECTED').length;
+
+//       // Goal type breakdown
+//       const taskGoals = goals.filter(g => g.type === 'TASK').length;
+//       const coinGoals = goals.filter(g => g.type === 'COIN').length;
+
+//       // Success metrics
+//       const completionRate = totalGoals > 0 ? ((completedGoals + approvedGoals) / totalGoals * 100).toFixed(2) : 0;
+//       const approvalRate = completedGoals > 0 ? (approvedGoals / (approvedGoals + rejectedGoals) * 100).toFixed(2) : 0;
+
+//       // Timeline analysis
+//       const goalsThisMonth = goals.filter(g => {
+//         const goalDate = new Date(g.createdAt);
+//         const now = new Date();
+//         return goalDate.getMonth() === now.getMonth() && goalDate.getFullYear() === now.getFullYear();
+//       }).length;
+
+//       const goalsThisYear = goals.filter(g => {
+//         const goalDate = new Date(g.createdAt);
+//         const now = new Date();
+//         return goalDate.getFullYear() === now.getFullYear();
+//       }).length;
+
+//       // Average time to completion (for approved goals)
+//       const approvedGoalsWithTimes = goals.filter(g => 
+//         g.status === 'APPROVED' && g.completedAt && g.createdAt
+//       );
+      
+//       let avgCompletionTime = 0;
+//       if (approvedGoalsWithTimes.length > 0) {
+//         const totalTime = approvedGoalsWithTimes.reduce((sum, goal) => {
+//           const timeDiff = new Date(goal.completedAt) - new Date(goal.createdAt);
+//           return sum + timeDiff;
+//         }, 0);
+//         avgCompletionTime = Math.round(totalTime / approvedGoalsWithTimes.length / (1000 * 60 * 60 * 24)); // in days
+//       }
+
+//       // Product value analysis
+//       let totalProductValue = 0;
+//       let approvedProductValue = 0;
+      
+//       goals.forEach(goal => {
+//         if (goal.products && goal.products.length > 0) {
+//           goal.products.forEach(product => {
+//             if (product.variants && product.variants.length > 0) {
+//               const minPrice = Math.min(...product.variants.map(v => v.price || 0));
+//               totalProductValue += minPrice;
+//               if (goal.status === 'APPROVED') {
+//                 approvedProductValue += minPrice;
+//               }
+//             }
+//           });
+//         }
+//       });
+
+//       // Task completion analysis (for TASK type goals)
+//       const taskGoalsWithTasks = goals.filter(g => g.type === 'TASK' && g.tasks && g.tasks.length > 0);
+//       let taskCompletionStats = {
+//         totalTasks: 0,
+//         completedTasks: 0,
+//         taskCompletionRate: 0
+//       };
+
+//       if (taskGoalsWithTasks.length > 0) {
+//         taskGoalsWithTasks.forEach(goal => {
+//           taskCompletionStats.totalTasks += goal.tasks.length;
+//           taskCompletionStats.completedTasks += goal.tasks.filter(t => 
+//             ['COMPLETED', 'APPROVED'].includes(t.status)
+//           ).length;
+//         });
+//         taskCompletionStats.taskCompletionRate = taskCompletionStats.totalTasks > 0 
+//           ? (taskCompletionStats.completedTasks / taskCompletionStats.totalTasks * 100).toFixed(2)
+//           : 0;
+//       }
+
+//       // Recent activity (last 7 days)
+//       const recentGoals = goals.filter(g => {
+//         const goalDate = new Date(g.updatedAt);
+//         const weekAgo = new Date();
+//         weekAgo.setDate(weekAgo.getDate() - 7);
+//         return goalDate >= weekAgo;
+//       });
+
+//       // Monthly trend data (last 6 months)
+//       const monthlyTrend = [];
+//       for (let i = 5; i >= 0; i--) {
+//         const date = new Date();
+//         date.setMonth(date.getMonth() - i);
+//         const monthGoals = goals.filter(g => {
+//           const goalDate = new Date(g.createdAt);
+//           return goalDate.getMonth() === date.getMonth() && 
+//                  goalDate.getFullYear() === date.getFullYear();
+//         });
+        
+//         monthlyTrend.push({
+//           month: date.toLocaleString('default', { month: 'short', year: 'numeric' }),
+//           total: monthGoals.length,
+//           completed: monthGoals.filter(g => ['COMPLETED', 'APPROVED'].includes(g.status)).length,
+//           approved: monthGoals.filter(g => g.status === 'APPROVED').length,
+//           rejected: monthGoals.filter(g => g.status === 'REJECTED').length
+//         });
+//       }
+
+//       // Goal status distribution for charts
+//       const statusDistribution = [
+//         { status: 'PENDING', count: pendingGoals, percentage: totalGoals > 0 ? (pendingGoals / totalGoals * 100).toFixed(1) : 0 },
+//         { status: 'COMPLETED', count: completedGoals, percentage: totalGoals > 0 ? (completedGoals / totalGoals * 100).toFixed(1) : 0 },
+//         { status: 'APPROVED', count: approvedGoals, percentage: totalGoals > 0 ? (approvedGoals / totalGoals * 100).toFixed(1) : 0 },
+//         { status: 'REJECTED', count: rejectedGoals, percentage: totalGoals > 0 ? (rejectedGoals / totalGoals * 100).toFixed(1) : 0 }
+//       ];
+
+//       return {
+//         childId: child.id,
+//         childName: child.name,
+//         memberSince: child.createdAt,
+//         summary: {
+//           totalGoals,
+//           pendingGoals,
+//           completedGoals,
+//           approvedGoals,
+//           rejectedGoals,
+//           completionRate: parseFloat(completionRate),
+//           approvalRate: parseFloat(approvalRate)
+//         },
+//         goalTypes: {
+//           taskGoals,
+//           coinGoals,
+//           taskPercentage: totalGoals > 0 ? (taskGoals / totalGoals * 100).toFixed(1) : 0,
+//           coinPercentage: totalGoals > 0 ? (coinGoals / totalGoals * 100).toFixed(1) : 0
+//         },
+//         performance: {
+//           avgCompletionTimeInDays: avgCompletionTime,
+//           goalsThisMonth,
+//           goalsThisYear,
+//           recentActivityCount: recentGoals.length
+//         },
+//         financial: {
+//           totalProductValue: totalProductValue.toFixed(2),
+//           approvedProductValue: approvedProductValue.toFixed(2),
+//           potentialSavings: (totalProductValue - approvedProductValue).toFixed(2)
+//         },
+//         taskAnalysis: taskCompletionStats,
+//         trends: {
+//           monthlyTrend,
+//           statusDistribution
+//         },
+//         recentGoals: recentGoals.slice(0, 5).map(g => ({
+//           id: g.id,
+//           title: g.title,
+//           type: g.type,
+//           status: g.status,
+//           updatedAt: g.updatedAt,
+//           productsCount: g.products ? g.products.length : 0,
+//           tasksCount: g.tasks ? g.tasks.length : 0
+//         }))
+//       };
+//     });
+
+//     // If single child requested, return just that child's data
+//     if (childId) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "Goal analytics retrieved successfully",
+//         data: analyticsData[0]
+//       });
+//     }
+
+//     // For multiple children, also provide parent-level summary
+//     const parentSummary = {
+//       totalChildren: children.length,
+//       totalGoalsAcrossChildren: analyticsData.reduce((sum, child) => sum + child.summary.totalGoals, 0),
+//       totalApprovedGoals: analyticsData.reduce((sum, child) => sum + child.summary.approvedGoals, 0),
+//       totalProductValue: analyticsData.reduce((sum, child) => sum + parseFloat(child.financial.totalProductValue), 0).toFixed(2),
+//       totalApprovedValue: analyticsData.reduce((sum, child) => sum + parseFloat(child.financial.approvedProductValue), 0).toFixed(2),
+//       avgCompletionRateAcrossChildren: analyticsData.length > 0 
+//         ? (analyticsData.reduce((sum, child) => sum + child.summary.completionRate, 0) / analyticsData.length).toFixed(2)
+//         : 0,
+//       mostActiveChild: analyticsData.reduce((prev, current) => 
+//         (current.summary.totalGoals > prev.summary.totalGoals) ? current : prev, 
+//         analyticsData[0]
+//       )?.childName || null
+//     };
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Goal analytics retrieved successfully",
+//       data: {
+//         parentSummary,
+//         childrenAnalytics: analyticsData,
+//         generatedAt: new Date().toISOString(),
+//         timeframe,
+//         dateRange: timeframe === 'custom' && startDate && endDate 
+//           ? { startDate, endDate } 
+//           : null
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error("Error retrieving goal analytics:", error);
+//     return next(
+//       new ErrorHandler(error.message || "Failed to retrieve goal analytics", 500)
+//     );
+//   }
+// });
+
+const getGoalAnalytics = asyncHandler(async (req, res, next) => {
+  const { goalId } = req.params;
+  const { timeline = 'days', startDate, endDate, type, childId } = req.query; // timeline: 'days', 'weeks', 'months'
+
+  try {
+    // Validate goalId
+    if (!isValidUUID(goalId)) {
+      return next(new ErrorHandler("Invalid goalId. Must be a valid UUID", 400));
+    }
+
+    // Validate timeline parameter
+    const validTimelines = ['days', 'weeks', 'months'];
+    if (!validTimelines.includes(timeline)) {
+      return next(new ErrorHandler("Invalid timeline. Must be 'days', 'weeks', or 'months'", 400));
+    }
+
+    // Validate type filter if provided
+    if (type && !['TASK', 'COIN'].includes(type)) {
+      return next(new ErrorHandler("Invalid type. Must be 'TASK' or 'COIN'", 400));
     }
 
     // Validate childId if provided
@@ -1056,302 +1380,693 @@ const getGoalAnalytics = asyncHandler(async (req, res, next) => {
       return next(new ErrorHandler("Invalid childId. Must be a valid UUID", 400));
     }
 
-    // Build where conditions for goals
-    let goalWhereConditions = {};
+    // Validate date range if provided
     let dateFilter = {};
+    if (startDate || endDate) {
+      const start = startDate ? moment(startDate) : null;
+      const end = endDate ? moment(endDate) : null;
 
-    // Date filtering
-    if (timeframe !== 'all') {
-      const now = new Date();
-      switch (timeframe) {
-        case 'week':
-          dateFilter.createdAt = {
-            [Op.gte]: new Date(now.setDate(now.getDate() - 7))
-          };
-          break;
-        case 'month':
-          dateFilter.createdAt = {
-            [Op.gte]: new Date(now.setMonth(now.getMonth() - 1))
-          };
-          break;
-        case 'quarter':
-          dateFilter.createdAt = {
-            [Op.gte]: new Date(now.setMonth(now.getMonth() - 3))
-          };
-          break;
-        case 'year':
-          dateFilter.createdAt = {
-            [Op.gte]: new Date(now.setFullYear(now.getFullYear() - 1))
-          };
-          break;
-        case 'custom':
-          if (startDate && endDate) {
-            dateFilter.createdAt = {
-              [Op.between]: [new Date(startDate), new Date(endDate)]
-            };
-          }
-          break;
+      if (start && !start.isValid()) {
+        return next(new ErrorHandler("Invalid startDate format. Use YYYY-MM-DD", 400));
       }
+      if (end && !end.isValid()) {
+        return next(new ErrorHandler("Invalid endDate format. Use YYYY-MM-DD", 400));
+      }
+      if (start && end && start.isAfter(end)) {
+        return next(new ErrorHandler("startDate cannot be after endDate", 400));
+      }
+
+      // Build date filter for completedAt
+      if (start) dateFilter.completedAt = { ...dateFilter.completedAt, [Op.gte]: start.toDate() };
+      if (end) dateFilter.completedAt = { ...dateFilter.completedAt, [Op.lte]: end.endOf('day').toDate() };
     }
 
-    // Get parent's children
-    const children = await models.Child.findAll({
-      where: { 
-        parentId: req.parent.obj.id,
-        ...(childId ? { id: childId } : {})
-      },
-      attributes: ['id', 'name', 'createdAt'],
+    // Fetch the goal
+    const goal = await models.Goal.findByPk(goalId, {
       include: [
         {
-          model: models.Goal,
-          as: 'goals',
-          where: dateFilter,
-          required: false,
-          include: [
-            {
-              model: models.Product,
-              as: 'products',
-              attributes: ['id', 'name'],
-              through: { attributes: [] },
-              required: false,
-              include: [
-                {
-                  model: models.ProductVariant,
-                  as: 'variants',
-                  attributes: ['price', 'compare_at_price'],
-                  where: { is_active: true },
-                  required: false,
-                }
-              ]
-            },
-            {
-              model: models.Task,
-              as: 'tasks',
-              attributes: ['id', 'status'],
-              through: { attributes: [] },
-              required: false,
-            }
-          ]
+          model: models.Child,
+          as: 'child',
+          attributes: ['id', 'name', 'age'],
+        },
+        // {
+        //   model: models.Product,
+        //   as: 'products',
+        //   attributes: ['id', 'name', 'price'],
+        //   through: { attributes: [] } // Exclude junction table attributes
+        // },
+        {
+          model: models.Task,
+          as: 'tasks',
+          attributes: ['id', 'status', 'completedAt', 'rewardCoins'],
+          through: { attributes: [] } // Exclude junction table attributes
         }
       ]
     });
 
-    if (!children || children.length === 0) {
-      return next(new ErrorHandler("No children found", 404));
+    if (!goal) {
+      return next(new ErrorHandler("Goal not found", 404));
     }
 
-    // Process analytics for each child
-    const analyticsData = children.map(child => {
-      const goals = child.goals || [];
-      
-      // Basic goal statistics
-      const totalGoals = goals.length;
-      const pendingGoals = goals.filter(g => g.status === 'PENDING').length;
-      const completedGoals = goals.filter(g => g.status === 'COMPLETED').length;
-      const approvedGoals = goals.filter(g => g.status === 'APPROVED').length;
-      const rejectedGoals = goals.filter(g => g.status === 'REJECTED').length;
+    // Build where clause for goal filtering
+    const goalWhereClause = { 
+      id: goalId,
+      ...dateFilter 
+    };
 
-      // Goal type breakdown
-      const taskGoals = goals.filter(g => g.type === 'TASK').length;
-      const coinGoals = goals.filter(g => g.type === 'COIN').length;
+    // Add type filter if specified
+    if (type) {
+      goalWhereClause.type = type;
+    }
 
-      // Success metrics
-      const completionRate = totalGoals > 0 ? ((completedGoals + approvedGoals) / totalGoals * 100).toFixed(2) : 0;
-      const approvalRate = completedGoals > 0 ? (approvedGoals / (approvedGoals + rejectedGoals) * 100).toFixed(2) : 0;
+    // Add child filter if specified
+    if (childId) {
+      goalWhereClause.childId = childId;
+    }
 
-      // Timeline analysis
-      const goalsThisMonth = goals.filter(g => {
-        const goalDate = new Date(g.createdAt);
-        const now = new Date();
-        return goalDate.getMonth() === now.getMonth() && goalDate.getFullYear() === now.getFullYear();
-      }).length;
-
-      const goalsThisYear = goals.filter(g => {
-        const goalDate = new Date(g.createdAt);
-        const now = new Date();
-        return goalDate.getFullYear() === now.getFullYear();
-      }).length;
-
-      // Average time to completion (for approved goals)
-      const approvedGoalsWithTimes = goals.filter(g => 
-        g.status === 'APPROVED' && g.completedAt && g.createdAt
-      );
-      
-      let avgCompletionTime = 0;
-      if (approvedGoalsWithTimes.length > 0) {
-        const totalTime = approvedGoalsWithTimes.reduce((sum, goal) => {
-          const timeDiff = new Date(goal.completedAt) - new Date(goal.createdAt);
-          return sum + timeDiff;
-        }, 0);
-        avgCompletionTime = Math.round(totalTime / approvedGoalsWithTimes.length / (1000 * 60 * 60 * 24)); // in days
-      }
-
-      // Product value analysis
-      let totalProductValue = 0;
-      let approvedProductValue = 0;
-      
-      goals.forEach(goal => {
-        if (goal.products && goal.products.length > 0) {
-          goal.products.forEach(product => {
-            if (product.variants && product.variants.length > 0) {
-              const minPrice = Math.min(...product.variants.map(v => v.price || 0));
-              totalProductValue += minPrice;
-              if (goal.status === 'APPROVED') {
-                approvedProductValue += minPrice;
-              }
-            }
-          });
+    // Fetch goal with related data for analytics
+    const goalData = await models.Goal.findOne({
+      where: goalWhereClause,
+      include: [
+        {
+          model: models.Child,
+          as: 'child',
+          attributes: ['id', 'name', 'age'],
+        },
+        // {
+        //   model: models.Product,
+        //   as: 'products',
+        //   attributes: ['id', 'name', 'price'],
+        //   through: { attributes: [] }
+        // },
+        {
+          model: models.Task,
+          as: 'tasks',
+          attributes: ['id', 'status', 'completedAt', 'rewardCoins', 'createdAt'],
+          through: { attributes: [] }
         }
+      ]
+    });
+
+    if (!goalData) {
+      return res.status(200).json({
+        success: true,
+        message: "No goal data found matching the criteria",
+        data: {
+          completionRate: 0,
+          averageCompletionTime: null,
+          rejectionRate: 0,
+          timeline: {
+            type: timeline,
+            data: [],
+            summary: {
+              totalPeriods: 0,
+              mostActiveLabel: null,
+              mostActiveCount: 0,
+              leastActiveLabel: null,
+              leastActiveCount: 0
+            }
+          },
+          goalBreakdown: {
+            totalGoals: 0,
+            completedGoals: 0,
+            approvedGoals: 0,
+            rejectedGoals: 0,
+            pendingGoals: 0
+          },
+          taskProgress: {
+            totalTasks: 0,
+            completedTasks: 0,
+            completionRate: 0,
+            totalRewardCoins: 0
+          },
+          // productAnalysis: {
+          //   totalProducts: 0,
+          //   totalValue: 0
+          // }
+        },
       });
+    }
 
-      // Task completion analysis (for TASK type goals)
-      const taskGoalsWithTasks = goals.filter(g => g.type === 'TASK' && g.tasks && g.tasks.length > 0);
-      let taskCompletionStats = {
-        totalTasks: 0,
-        completedTasks: 0,
-        taskCompletionRate: 0
-      };
+    // Initialize analytics variables
+    let completedGoals = 0;
+    let rejectedGoals = 0;
+    let pendingGoals = 0;
+    let approvedGoals = 0;
+    let totalCompletionTime = 0;
+    let completionTimesCount = 0;
+    const timelineCounts = new Map();
 
-      if (taskGoalsWithTasks.length > 0) {
-        taskGoalsWithTasks.forEach(goal => {
-          taskCompletionStats.totalTasks += goal.tasks.length;
-          taskCompletionStats.completedTasks += goal.tasks.filter(t => 
-            ['COMPLETED', 'APPROVED'].includes(t.status)
-          ).length;
-        });
-        taskCompletionStats.taskCompletionRate = taskCompletionStats.totalTasks > 0 
-          ? (taskCompletionStats.completedTasks / taskCompletionStats.totalTasks * 100).toFixed(2)
-          : 0;
+    // Analyze goal status
+    const { status, completedAt, createdAt, approvedAt, rejectedAt } = goalData;
+
+    // Count by status
+    switch (status) {
+      case "COMPLETED":
+        completedGoals++;
+        break;
+      case "APPROVED":
+        approvedGoals++;
+        break;
+      case "REJECTED":
+        rejectedGoals++;
+        break;
+      case "PENDING":
+        pendingGoals++;
+        break;
+    }
+
+    // Calculate completion metrics for completed and approved goals
+    if (status === "COMPLETED" || status === "APPROVED") {
+      const completionDate = completedAt || approvedAt || createdAt;
+      
+      if (completionDate && createdAt) {
+        // Average completion time calculation
+        const completionTime = moment(completionDate).diff(moment(createdAt), "hours");
+        totalCompletionTime += Math.abs(completionTime);
+        completionTimesCount++;
+
+        // Timeline analysis based on completion date
+        const dateMoment = moment(completionDate);
+        let timelineKey;
+        let timelineLabel;
+
+        switch (timeline) {
+          case 'days':
+            timelineKey = dateMoment.format('YYYY-MM-DD');
+            timelineLabel = dateMoment.format('dddd, MMM DD');
+            break;
+          case 'weeks':
+            const weekStart = dateMoment.clone().startOf('isoWeek');
+            const weekEnd = dateMoment.clone().endOf('isoWeek');
+            timelineKey = `${dateMoment.isoWeekYear()}-W${dateMoment.isoWeek()}`;
+            timelineLabel = `Week ${dateMoment.isoWeek()}, ${dateMoment.isoWeekYear()} (${weekStart.format('MMM DD')} - ${weekEnd.format('MMM DD')})`;
+            break;
+          case 'months':
+            timelineKey = dateMoment.format('YYYY-MM');
+            timelineLabel = dateMoment.format('MMMM YYYY');
+            break;
+        }
+
+        if (timelineKey && timelineLabel) {
+          const current = timelineCounts.get(timelineKey) || { 
+            key: timelineKey, 
+            label: timelineLabel, 
+            count: 0,
+            date: dateMoment.toDate()
+          };
+          current.count += 1;
+          timelineCounts.set(timelineKey, current);
+        }
       }
+    }
 
-      // Recent activity (last 7 days)
-      const recentGoals = goals.filter(g => {
-        const goalDate = new Date(g.updatedAt);
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        return goalDate >= weekAgo;
-      });
+    // Analyze associated tasks
+    const tasks = goalData.tasks || [];
+    let completedTasks = 0;
+    let totalRewardCoins = 0;
 
-      // Monthly trend data (last 6 months)
-      const monthlyTrend = [];
-      for (let i = 5; i >= 0; i--) {
-        const date = new Date();
-        date.setMonth(date.getMonth() - i);
-        const monthGoals = goals.filter(g => {
-          const goalDate = new Date(g.createdAt);
-          return goalDate.getMonth() === date.getMonth() && 
-                 goalDate.getFullYear() === date.getFullYear();
-        });
+    tasks.forEach(task => {
+      if (task.status === 'COMPLETED' || task.status === 'APPROVED') {
+        completedTasks++;
+      }
+      if (task.rewardCoins) {
+        totalRewardCoins += task.rewardCoins;
+      }
+    });
+
+    // Analyze associated products
+    const products = goalData.products || [];
+    let totalProductValue = 0;
+
+    products.forEach(product => {
+      if (product.price) {
+        totalProductValue += parseFloat(product.price);
+      }
+    });
+
+    // Calculate analytics
+    const totalGoals = 1; // Single goal analysis
+    const completionRate = totalGoals > 0 ? parseFloat(((completedGoals + approvedGoals) / totalGoals * 100).toFixed(2)) : 0;
+    const rejectionRate = totalGoals > 0 ? parseFloat((rejectedGoals / totalGoals * 100).toFixed(2)) : 0;
+    const averageCompletionTime = completionTimesCount > 0 ? parseFloat((totalCompletionTime / completionTimesCount).toFixed(2)) : null;
+
+    // Process timeline data
+    const timelineData = Array.from(timelineCounts.values())
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .map(item => ({
+        key: item.key,
+        label: item.label,
+        count: item.count,
+        percentage: totalGoals > 0 ? parseFloat((item.count / totalGoals * 100).toFixed(2)) : 0
+      }));
+
+    // Timeline summary
+    const timelineSummary = {
+      totalPeriods: timelineData.length,
+      mostActiveLabel: null,
+      mostActiveCount: 0,
+      leastActiveLabel: null,
+      leastActiveCount: 0
+    };
+
+    if (timelineData.length > 0) {
+      const sortedByCount = [...timelineData].sort((a, b) => b.count - a.count);
+      timelineSummary.mostActiveLabel = sortedByCount[0].label;
+      timelineSummary.mostActiveCount = sortedByCount[0].count;
+      timelineSummary.leastActiveLabel = sortedByCount[sortedByCount.length - 1].label;
+      timelineSummary.leastActiveCount = sortedByCount[sortedByCount.length - 1].count;
+    }
+
+    // Task completion rate
+    const taskCompletionRate = tasks.length > 0 ? parseFloat((completedTasks / tasks.length * 100).toFixed(2)) : 0;
+
+    // Return comprehensive analytics
+    return res.status(200).json({
+      success: true,
+      message: "Goal analytics fetched successfully",
+      data: {
+        // Core metrics
+        completionRate,
+        averageCompletionTime: averageCompletionTime ? `${averageCompletionTime} hours` : null,
+        rejectionRate,
         
-        monthlyTrend.push({
-          month: date.toLocaleString('default', { month: 'short', year: 'numeric' }),
-          total: monthGoals.length,
-          completed: monthGoals.filter(g => ['COMPLETED', 'APPROVED'].includes(g.status)).length,
-          approved: monthGoals.filter(g => g.status === 'APPROVED').length,
-          rejected: monthGoals.filter(g => g.status === 'REJECTED').length
-        });
-      }
-
-      // Goal status distribution for charts
-      const statusDistribution = [
-        { status: 'PENDING', count: pendingGoals, percentage: totalGoals > 0 ? (pendingGoals / totalGoals * 100).toFixed(1) : 0 },
-        { status: 'COMPLETED', count: completedGoals, percentage: totalGoals > 0 ? (completedGoals / totalGoals * 100).toFixed(1) : 0 },
-        { status: 'APPROVED', count: approvedGoals, percentage: totalGoals > 0 ? (approvedGoals / totalGoals * 100).toFixed(1) : 0 },
-        { status: 'REJECTED', count: rejectedGoals, percentage: totalGoals > 0 ? (rejectedGoals / totalGoals * 100).toFixed(1) : 0 }
-      ];
-
-      return {
-        childId: child.id,
-        childName: child.name,
-        memberSince: child.createdAt,
-        summary: {
+        // Timeline data with filtering
+        timeline: {
+          type: timeline,
+          data: timelineData,
+          summary: timelineSummary,
+          dateRange: {
+            startDate: startDate || null,
+            endDate: endDate || null
+          }
+        },
+        
+        // Goal status breakdown
+        goalBreakdown: {
           totalGoals,
-          pendingGoals,
           completedGoals,
           approvedGoals,
           rejectedGoals,
-          completionRate: parseFloat(completionRate),
-          approvalRate: parseFloat(approvalRate)
+          pendingGoals,
+          statusDistribution: {
+            completed: parseFloat((completedGoals / totalGoals * 100).toFixed(2)),
+            approved: parseFloat((approvedGoals / totalGoals * 100).toFixed(2)),
+            rejected: parseFloat((rejectedGoals / totalGoals * 100).toFixed(2)),
+            pending: parseFloat((pendingGoals / totalGoals * 100).toFixed(2))
+          }
         },
-        goalTypes: {
-          taskGoals,
-          coinGoals,
-          taskPercentage: totalGoals > 0 ? (taskGoals / totalGoals * 100).toFixed(1) : 0,
-          coinPercentage: totalGoals > 0 ? (coinGoals / totalGoals * 100).toFixed(1) : 0
+        
+        // Task progress analysis
+        taskProgress: {
+          totalTasks: tasks.length,
+          completedTasks,
+          completionRate: taskCompletionRate,
+          totalRewardCoins,
+          averageRewardPerTask: tasks.length > 0 ? parseFloat((totalRewardCoins / tasks.length).toFixed(2)) : 0,
+          taskStatusBreakdown: {
+            completed: tasks.filter(t => t.status === 'COMPLETED').length,
+            approved: tasks.filter(t => t.status === 'APPROVED').length,
+            rejected: tasks.filter(t => t.status === 'REJECTED').length,
+            pending: tasks.filter(t => t.status === 'PENDING').length,
+            overdue: tasks.filter(t => t.status === 'OVERDUE').length
+          }
         },
-        performance: {
-          avgCompletionTimeInDays: avgCompletionTime,
-          goalsThisMonth,
-          goalsThisYear,
-          recentActivityCount: recentGoals.length
+        
+        // Product analysis
+        productAnalysis: {
+          totalProducts: products.length,
+          totalValue: parseFloat(totalProductValue.toFixed(2)),
+          averageProductValue: products.length > 0 ? parseFloat((totalProductValue / products.length).toFixed(2)) : 0,
+          products: products.map(product => ({
+            id: product.id,
+            name: product.name,
+            price: product.price || 0
+          }))
         },
-        financial: {
-          totalProductValue: totalProductValue.toFixed(2),
-          approvedProductValue: approvedProductValue.toFixed(2),
-          potentialSavings: (totalProductValue - approvedProductValue).toFixed(2)
+        
+        // Goal details
+        goalDetails: {
+          id: goalData.id,
+          title: goalData.title,
+          description: goalData.description,
+          image: goalData.image,
+          type: goalData.type,
+          status: goalData.status,
+          createdAt: goalData.createdAt,
+          completedAt: goalData.completedAt,
+          approvedAt: goalData.approvedAt,
+          rejectedAt: goalData.rejectedAt,
+          rejectionReason: goalData.rejectionReason,
+          child: goalData.child ? {
+            id: goalData.child.id,
+            name: goalData.child.name,
+            age: goalData.child.age
+          } : null
         },
-        taskAnalysis: taskCompletionStats,
-        trends: {
-          monthlyTrend,
-          statusDistribution
-        },
-        recentGoals: recentGoals.slice(0, 5).map(g => ({
-          id: g.id,
-          title: g.title,
-          type: g.type,
-          status: g.status,
-          updatedAt: g.updatedAt,
-          productsCount: g.products ? g.products.length : 0,
-          tasksCount: g.tasks ? g.tasks.length : 0
-        }))
-      };
+        
+        // Query parameters used
+        filters: {
+          timeline,
+          startDate: startDate || null,
+          endDate: endDate || null,
+          type: type || null,
+          childId: childId || null
+        }
+      },
     });
-
-    // If single child requested, return just that child's data
-    if (childId) {
-      return res.status(200).json({
-        success: true,
-        message: "Goal analytics retrieved successfully",
-        data: analyticsData[0]
-      });
-    }
-
-    // For multiple children, also provide parent-level summary
-    const parentSummary = {
-      totalChildren: children.length,
-      totalGoalsAcrossChildren: analyticsData.reduce((sum, child) => sum + child.summary.totalGoals, 0),
-      totalApprovedGoals: analyticsData.reduce((sum, child) => sum + child.summary.approvedGoals, 0),
-      totalProductValue: analyticsData.reduce((sum, child) => sum + parseFloat(child.financial.totalProductValue), 0).toFixed(2),
-      totalApprovedValue: analyticsData.reduce((sum, child) => sum + parseFloat(child.financial.approvedProductValue), 0).toFixed(2),
-      avgCompletionRateAcrossChildren: analyticsData.length > 0 
-        ? (analyticsData.reduce((sum, child) => sum + child.summary.completionRate, 0) / analyticsData.length).toFixed(2)
-        : 0,
-      mostActiveChild: analyticsData.reduce((prev, current) => 
-        (current.summary.totalGoals > prev.summary.totalGoals) ? current : prev, 
-        analyticsData[0]
-      )?.childName || null
-    };
-
-    return res.status(200).json({
-      success: true,
-      message: "Goal analytics retrieved successfully",
-      data: {
-        parentSummary,
-        childrenAnalytics: analyticsData,
-        generatedAt: new Date().toISOString(),
-        timeframe,
-        dateRange: timeframe === 'custom' && startDate && endDate 
-          ? { startDate, endDate } 
-          : null
-      }
-    });
-
   } catch (error) {
-    console.error("Error retrieving goal analytics:", error);
-    return next(
-      new ErrorHandler(error.message || "Failed to retrieve goal analytics", 500)
-    );
+    console.error("Error fetching goal analytics:", error);
+    return next(new ErrorHandler(error.message || "Failed to fetch goal analytics", 500));
   }
 });
 
-module.exports={createGoal,getAllGoals,getGoalById,updateGoal,deleteGoal, getGoalAnalytics};
+// Analytics for multiple goals (child-level or overall)
+const getGoalsAnalytics = asyncHandler(async (req, res, next) => {
+  const { childId } = req.params; // Optional: for child-specific analytics
+  const { timeline = 'days', startDate, endDate, type, status } = req.query;
+
+  try {
+    // Validate childId if provided
+    if (childId && !isValidUUID(childId)) {
+      return next(new ErrorHandler("Invalid childId. Must be a valid UUID", 400));
+    }
+
+    // Validate timeline parameter
+    const validTimelines = ['days', 'weeks', 'months'];
+    if (!validTimelines.includes(timeline)) {
+      return next(new ErrorHandler("Invalid timeline. Must be 'days', 'weeks', or 'months'", 400));
+    }
+
+    // Validate type filter if provided
+    if (type && !['TASK', 'COIN'].includes(type)) {
+      return next(new ErrorHandler("Invalid type. Must be 'TASK' or 'COIN'", 400));
+    }
+
+    // Validate status filter if provided
+    if (status && !['PENDING', 'COMPLETED', 'APPROVED', 'REJECTED'].includes(status)) {
+      return next(new ErrorHandler("Invalid status. Must be 'PENDING', 'COMPLETED', 'APPROVED', or 'REJECTED'", 400));
+    }
+
+    // Validate date range if provided
+    let dateFilter = {};
+    if (startDate || endDate) {
+      const start = startDate ? moment(startDate) : null;
+      const end = endDate ? moment(endDate) : null;
+
+      if (start && !start.isValid()) {
+        return next(new ErrorHandler("Invalid startDate format. Use YYYY-MM-DD", 400));
+      }
+      if (end && !end.isValid()) {
+        return next(new ErrorHandler("Invalid endDate format. Use YYYY-MM-DD", 400));
+      }
+      if (start && end && start.isAfter(end)) {
+        return next(new ErrorHandler("startDate cannot be after endDate", 400));
+      }
+
+      // Build date filter for completedAt
+      if (start) dateFilter.completedAt = { ...dateFilter.completedAt, [Op.gte]: start.toDate() };
+      if (end) dateFilter.completedAt = { ...dateFilter.completedAt, [Op.lte]: end.endOf('day').toDate() };
+    }
+
+    // Build where clause for goals
+    const goalWhereClause = { 
+      ...dateFilter 
+    };
+
+    // Add filters
+    if (childId) goalWhereClause.childId = childId;
+    if (type) goalWhereClause.type = type;
+    if (status) goalWhereClause.status = status;
+
+    // Fetch goals with related data
+    const goals = await models.Goal.findAll({
+      where: goalWhereClause,
+      include: [
+        {
+          model: models.Child,
+          as: 'child',
+          attributes: ['id', 'name', 'age'],
+        },
+        {
+          model: models.Product,
+          as: 'products',
+          attributes: ['id', 'name', 'price'],
+          through: { attributes: [] }
+        },
+        {
+          model: models.Task,
+          as: 'tasks',
+          attributes: ['id', 'status', 'completedAt', 'rewardCoins'],
+          through: { attributes: [] }
+        }
+      ]
+    });
+
+    if (goals.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No goals found matching the criteria",
+        data: {
+          completionRate: 0,
+          averageCompletionTime: null,
+          rejectionRate: 0,
+          timeline: {
+            type: timeline,
+            data: [],
+            summary: {
+              totalPeriods: 0,
+              mostActiveLabel: null,
+              mostActiveCount: 0,
+              leastActiveLabel: null,
+              leastActiveCount: 0
+            }
+          },
+          goalBreakdown: {
+            totalGoals: 0,
+            completedGoals: 0,
+            approvedGoals: 0,
+            rejectedGoals: 0,
+            pendingGoals: 0
+          },
+          typeAnalysis: {
+            taskGoals: 0,
+            coinGoals: 0
+          },
+          ageGroupAnalysis: []
+        },
+      });
+    }
+
+    // Initialize analytics variables
+    let completedGoals = 0;
+    let rejectedGoals = 0;
+    let pendingGoals = 0;
+    let approvedGoals = 0;
+    let totalCompletionTime = 0;
+    let completionTimesCount = 0;
+    const timelineCounts = new Map();
+    const ageGroupCounts = new Map();
+    const typeCounts = { TASK: 0, COIN: 0 };
+
+    // Process each goal
+    goals.forEach((goal) => {
+      const { status, completedAt, createdAt, approvedAt, type, child } = goal;
+
+      // Count by status
+      switch (status) {
+        case "COMPLETED":
+          completedGoals++;
+          break;
+        case "APPROVED":
+          approvedGoals++;
+          break;
+        case "REJECTED":
+          rejectedGoals++;
+          break;
+        case "PENDING":
+          pendingGoals++;
+          break;
+      }
+
+      // Count by type
+      if (type) {
+        typeCounts[type] = (typeCounts[type] || 0) + 1;
+      }
+
+      // Age group analysis
+      if (child && child.age !== null && child.age !== undefined) {
+        const age = parseInt(child.age);
+        if (!isNaN(age) && age >= 0) {
+          const ageGroupStart = Math.floor(age / 5) * 5;
+          const ageGroupEnd = ageGroupStart + 4;
+          const ageGroupKey = `${ageGroupStart}-${ageGroupEnd}`;
+          
+          const current = ageGroupCounts.get(ageGroupKey) || {
+            ageGroup: ageGroupKey,
+            minAge: ageGroupStart,
+            maxAge: ageGroupEnd,
+            count: 0
+          };
+          current.count += 1;
+          ageGroupCounts.set(ageGroupKey, current);
+        }
+      }
+
+      // Timeline analysis for completed goals
+      if (status === "COMPLETED" || status === "APPROVED") {
+        const completionDate = completedAt || approvedAt || createdAt;
+        
+        if (completionDate && createdAt) {
+          // Average completion time calculation
+          const completionTime = moment(completionDate).diff(moment(createdAt), "hours");
+          totalCompletionTime += Math.abs(completionTime);
+          completionTimesCount++;
+
+          // Timeline analysis based on completion date
+          const dateMoment = moment(completionDate);
+          let timelineKey;
+          let timelineLabel;
+
+          switch (timeline) {
+            case 'days':
+              timelineKey = dateMoment.format('YYYY-MM-DD');
+              timelineLabel = dateMoment.format('dddd, MMM DD');
+              break;
+            case 'weeks':
+              const weekStart = dateMoment.clone().startOf('isoWeek');
+              const weekEnd = dateMoment.clone().endOf('isoWeek');
+              timelineKey = `${dateMoment.isoWeekYear()}-W${dateMoment.isoWeek()}`;
+              timelineLabel = `Week ${dateMoment.isoWeek()}, ${dateMoment.isoWeekYear()} (${weekStart.format('MMM DD')} - ${weekEnd.format('MMM DD')})`;
+              break;
+            case 'months':
+              timelineKey = dateMoment.format('YYYY-MM');
+              timelineLabel = dateMoment.format('MMMM YYYY');
+              break;
+          }
+
+          if (timelineKey && timelineLabel) {
+            const current = timelineCounts.get(timelineKey) || { 
+              key: timelineKey, 
+              label: timelineLabel, 
+              count: 0,
+              date: dateMoment.toDate()
+            };
+            current.count += 1;
+            timelineCounts.set(timelineKey, current);
+          }
+        }
+      }
+    });
+
+    // Calculate analytics
+    const totalGoals = goals.length;
+    const completionRate = totalGoals > 0 ? parseFloat(((completedGoals + approvedGoals) / totalGoals * 100).toFixed(2)) : 0;
+    const rejectionRate = totalGoals > 0 ? parseFloat((rejectedGoals / totalGoals * 100).toFixed(2)) : 0;
+    const averageCompletionTime = completionTimesCount > 0 ? parseFloat((totalCompletionTime / completionTimesCount).toFixed(2)) : null;
+
+    // Process timeline data
+    const timelineData = Array.from(timelineCounts.values())
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .map(item => ({
+        key: item.key,
+        label: item.label,
+        count: item.count,
+        percentage: totalGoals > 0 ? parseFloat((item.count / totalGoals * 100).toFixed(2)) : 0
+      }));
+
+    // Timeline summary
+    const timelineSummary = {
+      totalPeriods: timelineData.length,
+      mostActiveLabel: null,
+      mostActiveCount: 0,
+      leastActiveLabel: null,
+      leastActiveCount: 0
+    };
+
+    if (timelineData.length > 0) {
+      const sortedByCount = [...timelineData].sort((a, b) => b.count - a.count);
+      timelineSummary.mostActiveLabel = sortedByCount[0].label;
+      timelineSummary.mostActiveCount = sortedByCount[0].count;
+      timelineSummary.leastActiveLabel = sortedByCount[sortedByCount.length - 1].label;
+      timelineSummary.leastActiveCount = sortedByCount[sortedByCount.length - 1].count;
+    }
+
+    // Process age group data
+    const ageGroupAnalysis = Array.from(ageGroupCounts.values())
+      .sort((a, b) => a.minAge - b.minAge)
+      .map(item => ({
+        ageGroup: item.ageGroup,
+        count: item.count,
+        percentage: totalGoals > 0 ? parseFloat((item.count / totalGoals * 100).toFixed(2)) : 0
+      }));
+
+    // Return comprehensive analytics
+    return res.status(200).json({
+      success: true,
+      message: "Goals analytics fetched successfully",
+      data: {
+        // Core metrics
+        completionRate,
+        averageCompletionTime: averageCompletionTime ? `${averageCompletionTime} hours` : null,
+        rejectionRate,
+        
+        // Timeline data with filtering
+        timeline: {
+          type: timeline,
+          data: timelineData,
+          summary: timelineSummary,
+          dateRange: {
+            startDate: startDate || null,
+            endDate: endDate || null
+          }
+        },
+        
+        // Goal status breakdown
+        goalBreakdown: {
+          totalGoals,
+          completedGoals,
+          approvedGoals,
+          rejectedGoals,
+          pendingGoals,
+          statusDistribution: {
+            completed: totalGoals > 0 ? parseFloat((completedGoals / totalGoals * 100).toFixed(2)) : 0,
+            approved: totalGoals > 0 ? parseFloat((approvedGoals / totalGoals * 100).toFixed(2)) : 0,
+            rejected: totalGoals > 0 ? parseFloat((rejectedGoals / totalGoals * 100).toFixed(2)) : 0,
+            pending: totalGoals > 0 ? parseFloat((pendingGoals / totalGoals * 100).toFixed(2)) : 0
+          }
+        },
+        
+        // Type analysis
+        typeAnalysis: {
+          taskGoals: typeCounts.TASK || 0,
+          coinGoals: typeCounts.COIN || 0,
+          taskGoalsPercentage: totalGoals > 0 ? parseFloat(((typeCounts.TASK || 0) / totalGoals * 100).toFixed(2)) : 0,
+          coinGoalsPercentage: totalGoals > 0 ? parseFloat(((typeCounts.COIN || 0) / totalGoals * 100).toFixed(2)) : 0
+        },
+        
+        // Age group analysis
+        ageGroupAnalysis,
+        
+        // Query parameters used
+        filters: {
+          timeline,
+          startDate: startDate || null,
+          endDate: endDate || null,
+          type: type || null,
+          status: status || null,
+          childId: childId || null
+        }
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching goals analytics:", error);
+    return next(new ErrorHandler(error.message || "Failed to fetch goals analytics", 500));
+  }
+});
+
+module.exports={createGoal,getAllGoals,getGoalById,updateGoal,deleteGoal, 
+  getGoalAnalytics,
+  // getGoalAnalytics,
+  getGoalsAnalytics,
+};
