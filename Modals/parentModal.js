@@ -26,13 +26,21 @@ module.exports = (sequelize, DataTypes) => {
       },
       password: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       otp: DataTypes.STRING,
       otpExpire: DataTypes.DATE,
       isActive: {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
+      },
+      googleUserId: {
+        type: DataTypes.STRING,
+        unique: true,
+      },
+      authProvider: {
+        type: DataTypes.ENUM("local","google"),
+        defaultValue: "local",
       },
       isEmailVerified: {
         type: DataTypes.BOOLEAN,

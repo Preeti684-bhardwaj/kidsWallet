@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
+    googleLogin,
     signup,
     login,
     sendOtp,
@@ -24,6 +25,7 @@ const upload = require("../Middlewares/multer");
 
 
 // Delegate routing to the controller
+router.post("/auth/google_signin", googleLogin);
 router.post("/auth/signup",upload.single('image'), signup);
 router.post("/auth/login", login);
 router.post("/auth/send-otp",sendOtp);

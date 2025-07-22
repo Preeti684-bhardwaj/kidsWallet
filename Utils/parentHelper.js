@@ -1,4 +1,11 @@
 const jwt = require("jsonwebtoken");
+require("dotenv").config();
+const { CLIENT_ID, ANDROID_ENDUSER_CLIENT_ID, WEB_ENDUSER_CLIENT_ID } =
+  process.env;
+const { OAuth2Client } = require("google-auth-library");
+const googleClient = new OAuth2Client({
+  clientId: CLIENT_ID || ANDROID_ENDUSER_CLIENT_ID || WEB_ENDUSER_CLIENT_ID,
+});
 
 const generateToken = (user) => {
   try {
@@ -42,6 +49,7 @@ const generateOTP = () => {
     };
   }
 };
+
 function calculateNextDueDate(currentDate, frequency, dueTime) {
   const nextDate = new Date(currentDate);
   const [hours, minutes] = dueTime ? dueTime.split(':') : [0, 0];
@@ -73,7 +81,6 @@ function calculateNextDueDate(currentDate, frequency, dueTime) {
   return nextDate;
 }
 
-module.exports = { calculateNextDueDate };
 // Additional helper function for managing recurring tasks
 async function createNextRecurringTask(taskId) {
   const task = await models.Task.findByPk(taskId);
@@ -103,5 +110,25 @@ async function createNextRecurringTask(taskId) {
   return nextTask;
 }
 
+const verifyGoogleLogin = async (idToken) => {
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: idToken,
+      audience: [CLIENT_ID, ANDROID_ENDUSER_CLIENT_ID, WEB_ENDUSER_CLIENT_ID],
+    });
 
-module.exports = { generateOTP, generateToken,calculateNextDueDate,createNextRecurringTask };
+    const payload = ticket.getPayload();
+    console.log("Full token payload:", JSON.stringify(payload, null, 2));
+    console.log("Token audience:", payload.aud);
+
+    return payload;
+  } catch (error) {
+    console.error("Detailed error verifying Google token:", {
+      message: error.message,
+      stack: error.stack,
+    });
+    return null;
+  }
+};
+
+module.exports = { generateOTP, generateToken,calculateNextDueDate,createNextRecurringTask ,verifyGoogleLogin};

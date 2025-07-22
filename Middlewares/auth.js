@@ -169,15 +169,15 @@ exports.authenticateUnifiedToken = asyncHandler(async (req, res, next) => {
     const bearerHeader = req.headers["authorization"];
     console.log("hii i m in auth");
     
-        // Check if bearer header exists
-        if (!bearerHeader) {
-          return next(new ErrorHandler("Access Denied.", 401));
-        }
-    
-        // Extract the token
-        // Format in Postman: "Bearer eyJhbGciOiJIUzI1NiIs..."
-        const token = bearerHeader.replace("Bearer ", "").trim();
-    
+    // Check if bearer header exists
+    if (!bearerHeader) {
+      return next(new ErrorHandler("Access Denied.", 401));
+    }
+
+    // Extract the token
+    // Format in Postman: "Bearer eyJhbGciOiJIUzI1NiIs..."
+    const token = bearerHeader.replace("Bearer ", "").trim();
+
     if (!token) {
       return next(new ErrorHandler("No authorization token provided", 401));
     }
@@ -187,15 +187,55 @@ exports.authenticateUnifiedToken = asyncHandler(async (req, res, next) => {
     
     // Check user type and set appropriate properties
     if (decoded.obj && decoded.obj.type === 'child') {
-      req.child = decoded;
+      // Find child in database to get full details
+      const child = await models.Child.findOne({
+        where: { id: decoded.obj.id },
+        attributes: { exclude: ["password"] },
+      });
+
+      if (!child) {
+        return next(new ErrorHandler("Child not found", 404));
+      }
+
+      req.child = child;
       req.user = decoded; // Also set as user for unified access
+      req.userType = 'child';
+      
     } else if (decoded.obj && decoded.obj.type === 'parent') {
-      req.parent = decoded;
+      // Find parent in database to get full details
+      const parent = await models.Parent.findOne({
+        where: { id: decoded.obj.id },
+        attributes: { exclude: ["password", "otp", "otpExpire"] },
+      });
+
+      if (!parent) {
+        return next(new ErrorHandler("Parent not found", 404));
+      }
+
+      req.parent = parent;
       req.user = decoded; // Also set as user for unified access
+      req.userType = 'parent';
+      
+    } else if (decoded.obj && decoded.obj.type === 'admin') {
+      // Find admin in database to get full details
+      const admin = await models.Admin.findOne({
+        where: { id: decoded.obj.id },
+        attributes: { exclude: ["password"] },
+      });
+
+      if (!admin) {
+        return next(new ErrorHandler("Admin not found", 404));
+      }
+
+      req.admin = admin;
+      req.user = decoded; // Also set as user for unified access
+      req.userType = 'admin';
+      
     } else {
       return next(new ErrorHandler("Invalid token format", 401));
     }
 
+    req.token = token;
     next();
   } catch (error) {
     return next(new ErrorHandler("Invalid token", 401));
