@@ -356,26 +356,32 @@ class ChildAnalyticsController {
   async getPeriodStats(childId, period) {
     try {
       const now = new Date();
-      let startDate, endDate, groupBy, dateFormat;
+      let startDate, endDate, groupBy;
 
       switch (period) {
         case 'week':
           startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
           endDate = now;
-          groupBy = models.db.sequelize.fn('DATE', models.db.sequelize.col('completedAt'));
-          dateFormat = 'YYYY-MM-DD';
+          groupBy = models.db.sequelize.fn('to_char', 
+            models.db.sequelize.col('completedAt'), 
+            'YYYY-MM-DD'
+          );
           break;
         case 'month':
           startDate = new Date(now.getFullYear(), now.getMonth(), 1);
           endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-          groupBy = models.db.sequelize.fn('DATE', models.db.sequelize.col('completedAt'));
-          dateFormat = 'YYYY-MM-DD';
+          groupBy = models.db.sequelize.fn('to_char', 
+            models.db.sequelize.col('completedAt'), 
+            'YYYY-MM-DD'
+          );
           break;
         default: // day
           startDate = new Date(now.setHours(0, 0, 0, 0));
           endDate = new Date(now.setHours(23, 59, 59, 999));
-          groupBy = models.db.sequelize.fn('HOUR', models.db.sequelize.col('completedAt'));
-          dateFormat = 'HH';
+          groupBy = models.db.sequelize.fn('date_part', 
+            'hour',
+            models.db.sequelize.col('completedAt')
+          );
       }
 
       // Get completed tasks
@@ -389,10 +395,11 @@ class ChildAnalyticsController {
         },
         attributes: [
           [groupBy, 'period'],
-          [models.db.sequelize.fn('COUNT', '*'), 'count']
+          [models.db.sequelize.fn('COUNT', models.db.sequelize.col('*')), 'count']
         ],
         group: [groupBy],
-        raw: true
+        raw: true,
+        order: [[groupBy, 'ASC']]
       });
 
       // Get rejected tasks
@@ -405,19 +412,29 @@ class ChildAnalyticsController {
           }
         },
         attributes: [
-          [models.db.sequelize.fn('DATE', models.db.sequelize.col('rejectedAt')), 'period'],
-          [models.db.sequelize.fn('COUNT', '*'), 'count']
+          [
+            models.db.sequelize.fn('to_char', 
+              models.db.sequelize.col('rejectedAt'), 
+              'YYYY-MM-DD'
+            ), 
+            'period'
+          ],
+          [models.db.sequelize.fn('COUNT', models.db.sequelize.col('*')), 'count']
         ],
-        group: [models.db.sequelize.fn('DATE', models.db.sequelize.col('rejectedAt'))],
-        raw: true
+        group: [models.db.sequelize.fn('to_char', models.db.sequelize.col('rejectedAt'), 'YYYY-MM-DD')],
+        raw: true,
+        order: [[models.db.sequelize.fn('to_char', models.db.sequelize.col('rejectedAt'), 'YYYY-MM-DD'), 'ASC']]
       });
 
+      // Format the data
       return {
         period,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         completed: completedStats.map(item => ({
-          period: item.period,
+          period: period === 'day' ? 
+            String(Math.floor(Number(item.period))).padStart(2, '0') : // Format hour as "00"-"23"
+            item.period,
           count: parseInt(item.count)
         })),
         rejected: rejectedStats.map(item => ({
