@@ -287,129 +287,127 @@ const getChildNotifications = asyncHandler(async (req, res, next) => {
   }
 });
 
-
-
-// -----------EXTRA FUNCTIONS FOR NOTIFICATIONS-----------------------------------
-// Additional function to mark notifications as read
-const markNotificationsAsRead = asyncHandler(async (req, res, next) => {
-  try {
-    const { notificationIds } = req.body; // Array of notification IDs to mark as read
-    const userType = req.parent?.id ? "parent" : req.child?.id ? "child" : null;
-    const userId = req.parent?.id || req.child?.id;
-
-    if (!userType || !userId) {
-      return next(new ErrorHandler("Invalid authentication token", 401));
-    }
-
-    let whereClause = {
-      recipientId: userId,
-      recipientType: userType,
-      isRead: false
-    };
-
-    // If specific notification IDs are provided, update only those
-    if (notificationIds && Array.isArray(notificationIds) && notificationIds.length > 0) {
-      whereClause.id = {
-        [models.Sequelize.Op.in]: notificationIds
-      };
-    }
-
-    const [updatedCount] = await models.Notification.update(
-      { isRead: true },
-      { where: whereClause }
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: `${updatedCount} notification(s) marked as read`,
-      data: {
-        updatedCount
-      }
-    });
-  } catch (error) {
-    console.error("Error marking notifications as read:", error);
-    return next(
-      new ErrorHandler(error.message || "Failed to mark notifications as read", 500)
-    );
-  }
-});
-
-// Function to get notification counts/statistics
-const getNotificationStats = asyncHandler(async (req, res, next) => {
-  try {
-    const userType = req.parent?.id ? "parent" : req.child?.id ? "child" : null;
-    const userId = req.parent?.id || req.child?.id;
-
-    if (!userType || !userId) {
-      return next(new ErrorHandler("Invalid authentication token", 401));
-    }
-
-    const baseWhere = {
-      recipientId: userId,
-      recipientType: userType
-    };
-
-    // Get total counts
-    const totalCount = await models.Notification.count({
-      where: baseWhere
-    });
-
-    const unreadCount = await models.Notification.count({
-      where: { ...baseWhere, isRead: false }
-    });
-
-    const readCount = await models.Notification.count({
-      where: { ...baseWhere, isRead: true }
-    });
-
-    // Get counts by type
-    const typeStats = await models.Notification.findAll({
-      where: baseWhere,
-      attributes: [
-        'type',
-        [models.Sequelize.fn('COUNT', models.Sequelize.col('id')), 'count']
-      ],
-      group: ['type'],
-      raw: true
-    });
-
-    // Get counts by related item type
-    const relatedItemStats = await models.Notification.findAll({
-      where: {
-        ...baseWhere,
-        relatedItemType: { [models.Sequelize.Op.ne]: null }
-      },
-      attributes: [
-        'relatedItemType',
-        [models.Sequelize.fn('COUNT', models.Sequelize.col('id')), 'count']
-      ],
-      group: ['relatedItemType'],
-      raw: true
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "Notification statistics retrieved successfully",
-      data: {
-        totals: {
-          total: totalCount,
-          unread: unreadCount,
-          read: readCount
-        },
-        byType: typeStats,
-        byRelatedItemType: relatedItemStats
-      }
-    });
-  } catch (error) {
-    console.error("Error fetching notification stats:", error);
-    return next(
-      new ErrorHandler(error.message || "Failed to fetch notification statistics", 500)
-    );
-  }
-});
-
 module.exports = {
   childLogin,
   getChildTasks,
   getChildNotifications,
 };
+
+// // -----------EXTRA FUNCTIONS FOR NOTIFICATIONS-----------------------------------
+// // Additional function to mark notifications as read
+// const markNotificationsAsRead = asyncHandler(async (req, res, next) => {
+//   try {
+//     const { notificationIds } = req.body; // Array of notification IDs to mark as read
+//     const userType = req.parent?.id ? "parent" : req.child?.id ? "child" : null;
+//     const userId = req.parent?.id || req.child?.id;
+
+//     if (!userType || !userId) {
+//       return next(new ErrorHandler("Invalid authentication token", 401));
+//     }
+
+//     let whereClause = {
+//       recipientId: userId,
+//       recipientType: userType,
+//       isRead: false
+//     };
+
+//     // If specific notification IDs are provided, update only those
+//     if (notificationIds && Array.isArray(notificationIds) && notificationIds.length > 0) {
+//       whereClause.id = {
+//         [models.Sequelize.Op.in]: notificationIds
+//       };
+//     }
+
+//     const [updatedCount] = await models.Notification.update(
+//       { isRead: true },
+//       { where: whereClause }
+//     );
+
+//     return res.status(200).json({
+//       success: true,
+//       message: `${updatedCount} notification(s) marked as read`,
+//       data: {
+//         updatedCount
+//       }
+//     });
+//   } catch (error) {
+//     console.error("Error marking notifications as read:", error);
+//     return next(
+//       new ErrorHandler(error.message || "Failed to mark notifications as read", 500)
+//     );
+//   }
+// });
+
+// // Function to get notification counts/statistics
+// const getNotificationStats = asyncHandler(async (req, res, next) => {
+//   try {
+//     const userType = req.parent?.id ? "parent" : req.child?.id ? "child" : null;
+//     const userId = req.parent?.id || req.child?.id;
+
+//     if (!userType || !userId) {
+//       return next(new ErrorHandler("Invalid authentication token", 401));
+//     }
+
+//     const baseWhere = {
+//       recipientId: userId,
+//       recipientType: userType
+//     };
+
+//     // Get total counts
+//     const totalCount = await models.Notification.count({
+//       where: baseWhere
+//     });
+
+//     const unreadCount = await models.Notification.count({
+//       where: { ...baseWhere, isRead: false }
+//     });
+
+//     const readCount = await models.Notification.count({
+//       where: { ...baseWhere, isRead: true }
+//     });
+
+//     // Get counts by type
+//     const typeStats = await models.Notification.findAll({
+//       where: baseWhere,
+//       attributes: [
+//         'type',
+//         [models.Sequelize.fn('COUNT', models.Sequelize.col('id')), 'count']
+//       ],
+//       group: ['type'],
+//       raw: true
+//     });
+
+//     // Get counts by related item type
+//     const relatedItemStats = await models.Notification.findAll({
+//       where: {
+//         ...baseWhere,
+//         relatedItemType: { [models.Sequelize.Op.ne]: null }
+//       },
+//       attributes: [
+//         'relatedItemType',
+//         [models.Sequelize.fn('COUNT', models.Sequelize.col('id')), 'count']
+//       ],
+//       group: ['relatedItemType'],
+//       raw: true
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Notification statistics retrieved successfully",
+//       data: {
+//         totals: {
+//           total: totalCount,
+//           unread: unreadCount,
+//           read: readCount
+//         },
+//         byType: typeStats,
+//         byRelatedItemType: relatedItemStats
+//       }
+//     });
+//   } catch (error) {
+//     console.error("Error fetching notification stats:", error);
+//     return next(
+//       new ErrorHandler(error.message || "Failed to fetch notification statistics", 500)
+//     );
+//   }
+// });

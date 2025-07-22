@@ -184,6 +184,7 @@ exports.authenticateUnifiedToken = asyncHandler(async (req, res, next) => {
 
     // Verify and decode token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log(decoded);
     
     // Check user type and set appropriate properties
     if (decoded.obj && decoded.obj.type === 'child') {
@@ -217,6 +218,8 @@ exports.authenticateUnifiedToken = asyncHandler(async (req, res, next) => {
       req.userType = 'parent';
       
     } else if (decoded.obj && decoded.obj.type === 'admin') {
+      console.log('hi i am coming here');
+      
       // Find admin in database to get full details
       const admin = await models.Admin.findOne({
         where: { id: decoded.obj.id },

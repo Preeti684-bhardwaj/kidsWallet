@@ -4,7 +4,7 @@ const { Op } = require("sequelize")
 const ErrorHandler = require("../Utils/errorHandle");
 
 const buildAuthConditions = async (req, childId = null) => {
-    if (req.parent) {
+    if (req.parent || req.admin) {
       if (childId) {
         if (!isValidUUID(childId)) {
           throw new ErrorHandler("Invalid childId. Must be a valid UUID", 400);
@@ -23,7 +23,12 @@ const buildAuthConditions = async (req, childId = null) => {
           throw new ErrorHandler("Child not found or not authorized", 403);
         }
         return { childId };
-      } else {
+      }else if (req.admin) {
+        // Admin can access all children
+        console.log("Admin authenticated, retrieving all children");
+        return { childId: { [Op.ne]: null } }; // Return all children
+      }
+       else {
         // Get all children of the parent
         const children = await models.Child.findAll({
           where: { parentId: req.parent.obj.id },
