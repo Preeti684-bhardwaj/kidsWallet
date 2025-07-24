@@ -456,6 +456,7 @@ const verifyOTP = asyncHandler(async (req, res, next) => {
 
     // Update user details
     parent.isEmailVerified = true;
+    parent.isActive=true;
     parent.otp = null;
     parent.otpExpire = null;
     await parent.save();
