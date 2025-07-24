@@ -19,6 +19,8 @@ const {
     deleteUserByEmail,
     deleteChldAccount,
     deleteProfile,
+    getParentAnalytics,
+    getChildAnalytics
 } = require('../Controllers/parentController');
 const { authenticateToken} = require("../Middlewares/auth");
 const upload = require("../Middlewares/multer");
@@ -43,6 +45,7 @@ router.get("/get_all/child",authenticateToken,getAllChildren);
 router.get("/get_child_detail/:childId",authenticateToken,getChildById); 
 router.put("/update/child_detail/:childId",authenticateToken, upload.single('profilePicture'),updateChildProfile) 
 router.delete("/delete/child_account", authenticateToken, deleteChldAccount);  
+router.get("/analytics/:parentId", authenticateToken, getParentAnalytics);
 // router.use('/', parentController.router);
 
 module.exports = router;

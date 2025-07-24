@@ -1,4 +1,6 @@
 const nodeMailer = require("nodemailer");
+require("dotenv").config();
+
 
 // -----------------Send email-----------------------------------
 const sendEmail = async (options) => {
@@ -20,10 +22,10 @@ const sendEmail = async (options) => {
   });
 
   const mailOptions = {
-    from: process.env.SMPT_MAIL,
+    from:`"Kita" <${process.env.SMPT_MAIL}>`,
     to: options.email,
     subject: options.subject,
-    html: options.html, // Change 'text' to 'html'
+    html: options.html, 
   };
 
   await transporter.sendMail(mailOptions);

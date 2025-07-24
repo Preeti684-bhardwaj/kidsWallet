@@ -8,6 +8,9 @@ const {
   sortRecurrenceDates,
   validateQueryParams,
 } = require("../Utils/taskHelper");
+const {
+  isValidLength,
+} = require("../Validators/parentValidation");
 const { v4: uuidv4, validate: isValidUUID } = require("uuid");
 const { uploadFile, deleteFile } = require("../Utils/cdnImplementation");
 const ErrorHandler = require("../Utils/errorHandle");
@@ -31,6 +34,10 @@ const createTaskTemplate = asyncHandler(async (req, res, next) => {
           400
         )
       );
+    }
+    if (/\s{2,}/.test(trimmedTitle) ){
+      return next(
+        new ErrorHandler("title should not contain consecutive spaces",400));
     }
 
     // Check if task template with same title already exists

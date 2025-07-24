@@ -28,6 +28,7 @@ exports.authenticateToken = async (req, res, next) => {
     
     const userType = decoded.obj.type;
     const userId = decoded.obj.id;
+    const tokenVersion = decoded.obj.tokenVersion || 0; // Extract tokenVersion from token
 
     if (userType === "parent") {
       // Find parent
@@ -38,6 +39,17 @@ exports.authenticateToken = async (req, res, next) => {
 
       if (!parent) {
         return res.status(404).json({ error: "Parent not found" });
+      }
+
+      // Check if token version matches current user's token version
+      const currentTokenVersion = parent.tokenVersion || 0;
+      if (tokenVersion !== currentTokenVersion) {
+        return next(new ErrorHandler("Token has been invalidated. Please login again.", 401));
+      }
+
+      // Check if parent account is active
+      if (!parent.isActive) {
+        return next(new ErrorHandler("Account has been deactivated", 403));
       }
       
       req.parent = parent;
@@ -54,6 +66,14 @@ exports.authenticateToken = async (req, res, next) => {
       if (!admin) {
         return res.status(404).json({ error: "Admin not found" });
       }
+
+      // Check if token version matches current admin's token version (if admin has tokenVersion field)
+      if (admin.tokenVersion !== undefined) {
+        const currentTokenVersion = admin.tokenVersion || 0;
+        if (tokenVersion !== currentTokenVersion) {
+          return next(new ErrorHandler("Token has been invalidated. Please login again.", 401));
+        }
+      }
       
       req.admin = admin;
       req.userType = "admin";
@@ -67,6 +87,12 @@ exports.authenticateToken = async (req, res, next) => {
     next();
   } catch (error) {
     console.log("Authentication error:", error.message);
+    if (error.name === 'TokenExpiredError') {
+      return next(new ErrorHandler("Token has expired. Please login again.", 401));
+    }
+    if (error.name === 'JsonWebTokenError') {
+      return next(new ErrorHandler("Invalid token format", 401));
+    }
     return res.status(403).json({ error: "Invalid token" });
   }
 };
@@ -90,7 +116,8 @@ exports.authenticateAdminToken = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // console.log(decoded);
+    const tokenVersion = decoded.obj.tokenVersion || 0; // Extract tokenVersion from token
+    
     // Find admin
     const admin = await models.Admin.findOne({
       where: { id: decoded.obj.id },
@@ -100,6 +127,14 @@ exports.authenticateAdminToken = async (req, res, next) => {
     if (!admin) {
       return res.status(404).json({ error: "Admin not found" });
     }
+
+    // Check if token version matches current admin's token version (if admin has tokenVersion field)
+    if (admin.tokenVersion !== undefined) {
+      const currentTokenVersion = admin.tokenVersion || 0;
+      if (tokenVersion !== currentTokenVersion) {
+        return next(new ErrorHandler("Token has been invalidated. Please login again.", 401));
+      }
+    }
     
     req.admin = admin;
     req.token = token;
@@ -107,6 +142,12 @@ exports.authenticateAdminToken = async (req, res, next) => {
     next();
   } catch (error) {
     console.log("Admin authentication error:", error.message);
+    if (error.name === 'TokenExpiredError') {
+      return next(new ErrorHandler("Token has expired. Please login again.", 401));
+    }
+    if (error.name === 'JsonWebTokenError') {
+      return next(new ErrorHandler("Invalid token format", 401));
+    }
     return res.status(403).json({ error: "Invalid token" });
   }
 }
@@ -131,7 +172,7 @@ exports.authenticateChildToken = asyncHandler(async (req, res, next) => {
   try {
     // Get the token from Authorization header
     const bearerHeader = req.headers["authorization"];
-console.log("hii i m in auth");
+    console.log("hii i m in auth");
 
     // Check if bearer header exists
     if (!bearerHeader) {
@@ -145,9 +186,13 @@ console.log("hii i m in auth");
     if (!token) {
       return next(new ErrorHandler("Authentication token required.", 401));
     }
+    
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log(decoded);
+    
     const childId = decoded.obj.id;
+    const tokenVersion = decoded.obj.tokenVersion || 0; // Extract tokenVersion from token
+    
     // Find child
     const child = await models.Child.findOne({
       where: { id: childId },
@@ -157,9 +202,24 @@ console.log("hii i m in auth");
     if (!child) {
       return res.status(404).json({ error: "Child not found" });
     }
+
+    // Check if token version matches current child's token version (if child has tokenVersion field)
+    if (child.tokenVersion !== undefined) {
+      const currentTokenVersion = child.tokenVersion || 0;
+      if (tokenVersion !== currentTokenVersion) {
+        return next(new ErrorHandler("Token has been invalidated. Please login again.", 401));
+      }
+    }
+
     req.child = child;
     next();
   } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return next(new ErrorHandler("Token has expired. Please login again.", 401));
+    }
+    if (error.name === 'JsonWebTokenError') {
+      return next(new ErrorHandler("Invalid token format", 401));
+    }
     return res.status(403).json({ error: "Invalid token" });
   }
 });
@@ -186,6 +246,8 @@ exports.authenticateUnifiedToken = asyncHandler(async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log(decoded);
     
+    const tokenVersion = decoded.obj.tokenVersion || 0; // Extract tokenVersion from token
+    
     // Check user type and set appropriate properties
     if (decoded.obj && decoded.obj.type === 'child') {
       // Find child in database to get full details
@@ -196,6 +258,14 @@ exports.authenticateUnifiedToken = asyncHandler(async (req, res, next) => {
 
       if (!child) {
         return next(new ErrorHandler("Child not found", 404));
+      }
+
+      // Check if token version matches current child's token version (if child has tokenVersion field)
+      if (child.tokenVersion !== undefined) {
+        const currentTokenVersion = child.tokenVersion || 0;
+        if (tokenVersion !== currentTokenVersion) {
+          return next(new ErrorHandler("Token has been invalidated. Please login again.", 401));
+        }
       }
 
       req.child = child;
@@ -211,6 +281,17 @@ exports.authenticateUnifiedToken = asyncHandler(async (req, res, next) => {
 
       if (!parent) {
         return next(new ErrorHandler("Parent not found", 404));
+      }
+
+      // Check if token version matches current parent's token version
+      const currentTokenVersion = parent.tokenVersion || 0;
+      if (tokenVersion !== currentTokenVersion) {
+        return next(new ErrorHandler("Token has been invalidated. Please login again.", 401));
+      }
+
+      // Check if parent account is active
+      if (!parent.isActive) {
+        return next(new ErrorHandler("Account has been deactivated", 403));
       }
 
       req.parent = parent;
@@ -230,6 +311,14 @@ exports.authenticateUnifiedToken = asyncHandler(async (req, res, next) => {
         return next(new ErrorHandler("Admin not found", 404));
       }
 
+      // Check if token version matches current admin's token version (if admin has tokenVersion field)
+      if (admin.tokenVersion !== undefined) {
+        const currentTokenVersion = admin.tokenVersion || 0;
+        if (tokenVersion !== currentTokenVersion) {
+          return next(new ErrorHandler("Token has been invalidated. Please login again.", 401));
+        }
+      }
+
       req.admin = admin;
       req.user = decoded; // Also set as user for unified access
       req.userType = 'admin';
@@ -241,6 +330,12 @@ exports.authenticateUnifiedToken = asyncHandler(async (req, res, next) => {
     req.token = token;
     next();
   } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return next(new ErrorHandler("Token has expired. Please login again.", 401));
+    }
+    if (error.name === 'JsonWebTokenError') {
+      return next(new ErrorHandler("Invalid token format", 401));
+    }
     return next(new ErrorHandler("Invalid token", 401));
   }
 });

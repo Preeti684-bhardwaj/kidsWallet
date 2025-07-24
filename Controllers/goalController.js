@@ -231,6 +231,7 @@ const createGoal = asyncHandler(async (req, res, next) => {
         image: imageData,
         type,
         childId,
+        parentId,
         status: "PENDING", // Default status
       };
 
@@ -272,6 +273,7 @@ const createGoal = asyncHandler(async (req, res, next) => {
           type: goal.type,
           status: goal.status,
           childId: goal.childId,
+          parentId:parentId,
           isGift,
           productsCount: validProductIds.length,
           tasksCount: validTaskIds.length,

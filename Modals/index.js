@@ -145,6 +145,9 @@ models.ProductInventory.belongsTo(models.ProductLocation, {
 models.Child.hasMany(models.Goal, { foreignKey: 'childId', as: 'goals', onDelete: 'CASCADE', hooks: true });
 models.Goal.belongsTo(models.Child, { foreignKey: 'childId', as: 'child' });
 
+models.Parent.hasMany(models.Goal, { foreignKey: 'parentId', as: 'goals', onDelete: 'CASCADE', hooks: true });
+models.Goal.belongsTo(models.Parent, { foreignKey: 'parentId', as: 'parent' });
+
 // Goal ↔ Product (Many-to-Many: Goals can have multiple products, products can be in multiple goals)
 models.Goal.belongsToMany(models.Product, {
   through: "GoalProduct", // Junction table name

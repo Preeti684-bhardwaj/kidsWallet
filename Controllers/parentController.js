@@ -3,8 +3,11 @@ const models = require("../Modals/index");
 const db = require("../Configs/db/DbConfig");
 const { Op, literal } = require("sequelize");
 const sequelize = db.sequelize;
-const { generateToken, generateOTP ,verifyGoogleLogin } = require("../Utils/parentHelper");
+const { generateToken, generateOTP ,verifyGoogleLogin ,getDateRange,getTimeSeriesData} = require("../Utils/parentHelper");
 const { phoneValidation } = require("../Utils/phoneValidation");
+const {
+  validateCurrencyCountry,COUNTRY_CURRENCY_MAP
+} = require("../Validators/countryCurrencyValidation");
 const {
   isValidEmail,
   isValidUsernameLength,
@@ -36,7 +39,6 @@ const { uploadFile, deleteFile } = require("../Utils/cdnImplementation");
 
 // ---------------google login------------------------------------------------
 const googleLogin = asyncHandler(async (req, res, next) => {
-  // Start a transaction
   const transaction = await db.sequelize.transaction();
 
   try {
@@ -80,7 +82,7 @@ const googleLogin = asyncHandler(async (req, res, next) => {
           { email: googlePayload.email },
         ],
       },
-      transaction, // Pass transaction to findOne
+      transaction,
     });
 
     if (!parent) {
@@ -102,9 +104,10 @@ const googleLogin = asyncHandler(async (req, res, next) => {
             isEmailVerified: true,
             authProvider: "google",
             isActive: true,
+            tokenVersion: 0, // Initialize tokenVersion for new users
           },
           { transaction }
-        ); // Pass transaction to create
+        );
       } catch (error) {
         await transaction.rollback();
         console.error("Error creating user:", error);
@@ -134,14 +137,22 @@ const googleLogin = asyncHandler(async (req, res, next) => {
     // Commit transaction
     await transaction.commit();
 
-    const obj = {
+    // Create user object for token
+    const userObj = {
       type: "parent",
       id: parent.id,
       email: parent.email,
       name: parent.name,
+      tokenVersion: parent.tokenVersion || 0 // Include tokenVersion
     };
 
-    const accessToken = generateToken(obj);
+    // Generate token
+    const accessToken = generateToken(userObj);
+    
+    // Check if token generation failed
+    if (accessToken && !accessToken.success && accessToken.status === 500) {
+      return next(new ErrorHandler(accessToken.message, 500));
+    }
 
     // Return response
     return res.status(200).json({
@@ -219,7 +230,7 @@ const signup = asyncHandler(async (req, res, next) => {
     // Validate name
     const nameError = isValidLength(name);
     if (nameError) {
-      return next(new ErrorHandler(nameError, 400));
+      return next(new ErrorHandler(`name ${nameError}`, 400));
     }
 
     // Validate phone only if both country code and phone are provided
@@ -370,17 +381,17 @@ const sendOtp = asyncHandler(async (req, res, next) => {
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2>One-Time Password (OTP) Verification</h2>
       <p>Dear ${parent.name},</p>
-      <p>Your verification code for KidsWallet is:</p>
+      <p>Your verification code for Kita is:</p>
       <h1 style="font-size: 32px; background-color: #f0f0f0; padding: 10px; display: inline-block;">${otp}</h1>
       <p>This code is valid for 10 minutes.</p>
       <p>If you didn't request this code, please ignore this email.</p>
-      <p>Best regards,<br>KidsWallet Team</p>
+      <p>Best regards,<br>Kita Team</p>
     </div>
   `;
     try {
       await sendEmail({
         email: parent.email,
-        subject: `KidsWallet : Your Verification Code`,
+        subject: `Kita : Your Verification Code`,
         html: htmlContent,
       });
 
@@ -430,7 +441,6 @@ const verifyOTP = asyncHandler(async (req, res, next) => {
     const parent = await models.Parent.findOne({
       where: { email: lowercaseEmail },
     });
-    console.log(parent);
 
     if (!parent) {
       return next(new ErrorHandler("Parent not found", 404));
@@ -450,13 +460,22 @@ const verifyOTP = asyncHandler(async (req, res, next) => {
     parent.otpExpire = null;
     await parent.save();
 
-    const obj = {
+    // Create user object for token
+    const userObj = {
       type: "parent",
       id: parent.id,
       email: parent.email,
       name: parent.name,
+      tokenVersion: parent.tokenVersion || 0 // Include tokenVersion
     };
-    const accessToken = generateToken(obj);
+    
+    // Generate token
+    const accessToken = generateToken(userObj);
+    
+    // Check if token generation failed
+    if (accessToken && !accessToken.success && accessToken.status === 500) {
+      return next(new ErrorHandler(accessToken.message, 500));
+    }
 
     return res.status(200).json({
       success: true,
@@ -482,22 +501,25 @@ const login = asyncHandler(async (req, res, next) => {
     if ([email, password].some((field) => field?.trim() === "")) {
       return next(new ErrorHandler("All required fields must be filled", 400));
     }
+    
     const lowercaseEmail = email.trim().toLowerCase();
+    
     // Validate email format
     if (!isValidEmail(lowercaseEmail)) {
       return next(new ErrorHandler("Invalid email", 400));
     }
+    
     // Find user
     const parent = await models.Parent.findOne({
       where: { email: lowercaseEmail },
     });
+    
     if (!parent) {
       return next(new ErrorHandler("Parent not found", 404));
     }
 
     // Verify password
     const isPasswordMatched = await bcrypt.compare(password, parent.password);
-    // console.log("Password match result:", isPasswordMatched);
 
     if (!isPasswordMatched) {
       return next(new ErrorHandler("Invalid password", 400));
@@ -508,15 +530,22 @@ const login = asyncHandler(async (req, res, next) => {
       return next(new ErrorHandler("Please verify your email", 400));
     }
 
-    let obj = {
+    // Create user object for token
+    const userObj = {
       type: "parent",
       id: parent.id,
       email: parent.email,
       name: parent.name,
+      tokenVersion: parent.tokenVersion || 0 // Include tokenVersion
     };
 
-    // Generate token
-    const token = generateToken(obj);
+    // Generate token - handle both success and error cases
+    const token = generateToken(userObj);
+    
+    // Check if token generation failed
+    if (token && !token.success && token.status === 500) {
+      return next(new ErrorHandler(token.message, 500));
+    }
 
     return res.status(200).json({
       success: true,
@@ -575,18 +604,18 @@ const forgotPassword = asyncHandler(async (req, res, next) => {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>Password Reset Request</h2>
         <p>Hello ${parent.name},</p>
-        <p>You have requested a password reset for your KidsWallet account.</p>
-          <p>Your One Time Password (OTP) for KidsWallet is:</p>
+        <p>You have requested a password reset for your Kita account.</p>
+          <p>Your One Time Password (OTP) for Kita is:</p>
         <h1 style="font-size: 32px; background-color: #f0f0f0; padding: 10px; display: inline-block;">${otp}</h1>
         <p>This OTP is valid for 10 minutes.</p>
         <p>If you didn't request this password reset, please ignore this email.</p>
-        <p>Best regards,<br>KidsWallet Team</p>
+        <p>Best regards,<br>Kita Team</p>
       </div> 
       `;
     try {
       await sendEmail({
         email: parent.email,
-        subject: `KidsWallet: Password Reset Request`,
+        subject: `Kita: Password Reset Request`,
         html: htmlContent,
       });
 
@@ -625,20 +654,23 @@ const resetPassword = asyncHandler(async (req, res, next) => {
     if (!otp || otp.trim() === "") {
       return next(new ErrorHandler("Missing OTP", 400));
     }
+    
     const lowercaseEmail = email.toLowerCase().trim();
     const passwordValidationResult = isValidPassword(password);
     if (passwordValidationResult) {
       return next(new ErrorHandler(passwordValidationResult, 400));
     }
+    
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Find the user by ID
+    // Find the user by email
     const parent = await models.Parent.findOne({
       where: {
         email: lowercaseEmail,
       },
     });
+    
     if (!parent) {
       return next(new ErrorHandler("Parent not found", 404));
     }
@@ -651,15 +683,20 @@ const resetPassword = asyncHandler(async (req, res, next) => {
       return next(new ErrorHandler("Expired OTP", 400));
     }
 
-    // Update the user's password and clear OTP fields
-    parent.password = hashedPassword;
-    parent.otp = null;
-    parent.otpExpire = null;
-    await parent.save();
+    // CRITICAL: Increment tokenVersion to invalidate all existing tokens
+    const newTokenVersion = (parent.tokenVersion || 0) + 1;
+
+    // Update the user's password, increment tokenVersion, and clear OTP fields
+    await parent.update({
+      password: hashedPassword,
+      tokenVersion: newTokenVersion, // This invalidates all existing tokens
+      otp: null,
+      otpExpire: null
+    });
 
     return res.status(200).json({
       success: true,
-      message: `Password reset successfully`,
+      message: "Password reset successfully. Please login with your new password.",
     });
   } catch (error) {
     return next(new ErrorHandler(error.message, 500));
@@ -716,7 +753,7 @@ const getParentDetailById = asyncHandler(async (req, res, next) => {
 const updateProfile = asyncHandler(async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const allowedFields = ["name", "country", "currency"];
+    const allowedFields = ["name", "country", "currency","image"];
     const parent = req.parent;
     
     // Handle image upload if file is provided
@@ -765,6 +802,22 @@ const updateProfile = asyncHandler(async (req, res, next) => {
       );
     }
     
+    // Prepare values for validation
+    const newCountry = req.body.country || parent.country;
+    const newCurrency = req.body.currency || parent.currency;
+    
+    // Validate currency-country combination
+    if (newCountry && newCurrency) {
+      if (!validateCurrencyCountry(newCountry, newCurrency)) {
+        await transaction.rollback();
+        const validCurrencies = COUNTRY_CURRENCY_MAP[newCountry.toUpperCase()];
+        const errorMessage = validCurrencies 
+          ? `Invalid currency '${newCurrency}' for country '${newCountry}'. Valid currencies are: ${validCurrencies.join(', ')}`
+          : `Country '${newCountry}' is not supported`;
+        return next(new ErrorHandler(errorMessage, 400));
+      }
+    }
+    
     // Sanitize and validate 'name' if present
     if (req.body.name) {
       const sanitizedName = req.body.name.trim().replace(/\s+/g, " ");
@@ -796,7 +849,9 @@ const updateProfile = asyncHandler(async (req, res, next) => {
       user: parentData,
     });
   } catch (error) {
-    await transaction.rollback();
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
     return next(new ErrorHandler(error.message, 500));
   }
 });
@@ -843,13 +898,30 @@ const createChild = asyncHandler(async (req, res, next) => {
     if (nameError) {
       return next(new ErrorHandler(nameError, 400));
     }
+    
+    // Validate username
     const usernameError = isValidUsernameLength(sanatizedUsername);
     if (usernameError) {
       console.log("usernameError", usernameError);
       return next(new ErrorHandler(usernameError, 400));
     }
+    
+    // Validate age
+    if (!age) {
+      return next(new ErrorHandler("Age is required", 400));
+    }
+    
+    const ageNumber = parseInt(age);
+    if (isNaN(ageNumber)) {
+      return next(new ErrorHandler("Age must be a valid number", 400));
+    }
+    
+    if (ageNumber < 5 || ageNumber > 16) {
+      return next(new ErrorHandler("Age must be between 5 and 16 years", 400));
+    }
+    
+    // Validate gender
     if (gender) {
-      // Validate recurrence
       const allowedGender = ["male", "female", "other"];
       if (gender && (!gender || !allowedGender.includes(gender))) {
         return next(
@@ -857,6 +929,7 @@ const createChild = asyncHandler(async (req, res, next) => {
         );
       }
     }
+    
     // Validate the password and create a new user
     const passwordValidationResult = isValidPassword(password);
     if (passwordValidationResult) {
@@ -865,6 +938,7 @@ const createChild = asyncHandler(async (req, res, next) => {
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
+    
     // Validate parent exists
     const parent = await models.Parent.findByPk(parentId);
     if (!parent) {
@@ -876,13 +950,13 @@ const createChild = asyncHandler(async (req, res, next) => {
       where: { username: sanatizedUsername },
     });
     if (existingChild) {
-      return next(new ErrorHandler("Username already taken", 400));
+      return next(new ErrorHandler("Username already taken,Please choose a different username", 400));
     }
 
     // Create child account
     const newChild = await models.Child.create({
       name: sanitizedName,
-      age,
+      age: ageNumber, // Use the validated number
       gender,
       profilePicture: profilePictureData, // Store as JSON
       username: sanatizedUsername,
@@ -1357,6 +1431,213 @@ const deleteProfile = asyncHandler(async (req, res, next) => {
   }
 });
 
+// Main Analytics Controller
+const getParentAnalytics = async (req, res) => {
+  try {
+    const { parentId } = req.params;
+    const { childId, timeFilter = 'week' } = req.query;
+
+    // Validate parent exists
+    const parent = await models.Parent.findByPk(parentId);
+    if (!parent) {
+      return res.status(404).json({
+        success: false,
+        message: 'Parent not found'
+      });
+    }
+
+    // 1. Total chores/tasks created by parent
+    const totalChoresCreated = await models.Task.count({
+      where: { parentId }
+    });
+
+    // 2. Total goals created by parent (goals now have direct parentId)
+    const totalGoalsCreated = await models.Goal.count({
+      where: { parentId }
+    });
+
+    // 3. Get all children of this parent
+    const children = await models.Child.findAll({
+      where: { parentId },
+      include: [
+        {
+          model: models.Task,
+          required: false,
+          attributes: ['id', 'status']
+        },
+        {
+          model: models.Goal,
+          as: 'goals',
+          required: false,
+          attributes: ['id', 'status']
+        }
+      ]
+    });
+
+    // Process children data
+    const childrenAnalytics = children.map(child => {
+      const tasks = child.Tasks || [];
+      const goals = child.goals || [];
+
+      return {
+        id: child.id,
+        name: child.name,
+        age: child.age,
+        username: child.username,
+        profilePicture: child.profilePicture,
+        coinBalance: child.coinBalance,
+        taskStats: {
+          completed: tasks.filter(t => t.status === 'COMPLETED').length,
+          pending: tasks.filter(t => t.status === 'PENDING').length,
+          overdue: tasks.filter(t => t.status === 'OVERDUE').length,
+          rejected: tasks.filter(t => t.status === 'REJECTED').length,
+          approved: tasks.filter(t => t.status === 'APPROVED').length,
+          total: tasks.length
+        },
+        goalStats: {
+          completed: goals.filter(g => g.status === 'COMPLETED').length,
+          pending: goals.filter(g => g.status === 'PENDING').length,
+          rejected: goals.filter(g => g.status === 'REJECTED').length,
+          approved: goals.filter(g => g.status === 'APPROVED').length,
+          total: goals.length
+        }
+      };
+    });
+
+    // Filter by specific child if requested
+    const selectedChildData = childId 
+      ? childrenAnalytics.find(child => child.id === childId)
+      : null;
+
+    // 4. Task approval/rejection analytics over time
+    const taskAnalytics = await getTimeSeriesData(parentId, 'Task', 'status', timeFilter);
+
+    // 5. Goal approval/rejection analytics over time
+    const goalAnalytics = await getTimeSeriesData(parentId, 'Goal', 'status', timeFilter);
+
+    // Additional summary statistics
+    const summaryStats = {
+      totalTasks: {
+        pending: await models.Task.count({ where: { parentId, status: 'PENDING' } }),
+        completed: await models.Task.count({ where: { parentId, status: 'COMPLETED' } }),
+        approved: await models.Task.count({ where: { parentId, status: 'APPROVED' } }),
+        rejected: await models.Task.count({ where: { parentId, status: 'REJECTED' } }),
+        overdue: await models.Task.count({ where: { parentId, status: 'OVERDUE' } })
+      },
+      totalGoals: {
+        pending: await models.Goal.count({ where: { parentId, status: 'PENDING' } }),
+        completed: await models.Goal.count({ where: { parentId, status: 'COMPLETED' } }),
+        approved: await models.Goal.count({ where: { parentId, status: 'APPROVED' } }),
+        rejected: await models.Goal.count({ where: { parentId, status: 'REJECTED' } })
+      }
+    };
+
+    res.status(200).json({
+      success: true,
+      data: {
+        parentInfo: {
+          id: parent.id,
+          name: parent.name,
+          email: parent.email,
+          totalChoresCreated,
+          totalGoalsCreated
+        },
+        children: childrenAnalytics,
+        selectedChild: selectedChildData,
+        taskAnalytics,
+        goalAnalytics,
+        summaryStats,
+        filters: {
+          appliedTimeFilter: timeFilter,
+          selectedChildId: childId || null
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getParentAnalytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+// Get specific child analytics
+const getChildAnalytics = async (req, res) => {
+  try {
+    const { parentId, childId } = req.params;
+
+    const child = await models.Child.findOne({
+      where: { id: childId, parentId },
+      include: [
+        {
+          model: models.Task,
+          required: false
+        },
+        {
+          model: models.Goal,
+          as: 'goals',
+          required: false
+        },
+        {
+          model: models.Streak,
+          required: false
+        }
+      ]
+    });
+
+    if (!child) {
+      return res.status(404).json({
+        success: false,
+        message: 'Child not found'
+      });
+    }
+
+    const tasks = child.Tasks || [];
+    const goals = child.goals || [];
+
+    res.status(200).json({
+      success: true,
+      data: {
+        childInfo: {
+          id: child.id,
+          name: child.name,
+          age: child.age,
+          username: child.username,
+          profilePicture: child.profilePicture,
+          coinBalance: child.coinBalance
+        },
+        taskStats: {
+          completed: tasks.filter(t => t.status === 'COMPLETED').length,
+          pending: tasks.filter(t => t.status === 'PENDING').length,
+          overdue: tasks.filter(t => t.status === 'OVERDUE').length,
+          rejected: tasks.filter(t => t.status === 'REJECTED').length,
+          approved: tasks.filter(t => t.status === 'APPROVED').length,
+          total: tasks.length
+        },
+        goalStats: {
+          completed: goals.filter(g => g.status === 'COMPLETED').length,
+          pending: goals.filter(g => g.status === 'PENDING').length,
+          rejected: goals.filter(g => g.status === 'REJECTED').length,
+          approved: goals.filter(g => g.status === 'APPROVED').length,
+          total: goals.length
+        },
+        streak: child.Streak
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getChildAnalytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   googleLogin,
   signup,
@@ -1376,4 +1657,6 @@ module.exports = {
   deleteUserByEmail,
   deleteChldAccount,
   deleteProfile,
+  getParentAnalytics,
+  getChildAnalytics
 };

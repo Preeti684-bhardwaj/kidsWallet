@@ -40,8 +40,8 @@ const isValidLength = (name) => {
   if (/^\s|\s$/.test(name)) {
     return "input should not start or end with a space";
   }
-  if (name.length < 4 || name.length > 40) {
-    return "input should be between 4 and 40 characters long";
+  if (name.length < 3 || name.length > 40) {
+    return "input should be between 3 and 40 characters long";
   }
   if (/^[0-9]/.test(name)) {
     return "input should not start with a number";
