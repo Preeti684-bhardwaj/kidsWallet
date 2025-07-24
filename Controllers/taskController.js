@@ -2286,29 +2286,29 @@ const getTaskTemplateAnalytics = asyncHandler(async (req, res, next) => {
       return res.status(200).json({
         success: true,
         message: "No tasks found for this task template",
-        data: {
-          completionRate: 0,
-          averageCompletionTime: null,
-          rejectionRate: 0,
-          timeline: {
-            type: timeline,
-            data: [],
-            summary: {
-              totalPeriods: 0,
-              mostActiveLabel: null,
-              mostActiveCount: 0,
-              leastActiveLabel: null,
-              leastActiveCount: 0
-            }
-          },
-          usageByAgeGroup: [],
-          totalTasks: 0,
-          completedTasks: 0,
-          rejectedTasks: 0,
-          pendingTasks: 0,
-          approvedTasks: 0,
-          overdueeTasks: 0
-        },
+        // data: {
+        //   completionRate: 0,
+        //   averageCompletionTime: null,
+        //   rejectionRate: 0,
+        //   timeline: {
+        //     type: timeline,
+        //     data: [],
+        //     summary: {
+        //       totalPeriods: 0,
+        //       mostActiveLabel: null,
+        //       mostActiveCount: 0,
+        //       leastActiveLabel: null,
+        //       leastActiveCount: 0
+        //     }
+        //   },
+        //   usageByAgeGroup: [],
+        //   totalTasks: 0,
+        //   completedTasks: 0,
+        //   rejectedTasks: 0,
+        //   pendingTasks: 0,
+        //   approvedTasks: 0,
+        //   overdueeTasks: 0
+        // },
       });
     }
 
