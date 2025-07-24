@@ -994,41 +994,200 @@ const createChild = asyncHandler(async (req, res, next) => {
   }
 });
 
-// -----------------get all children--------------------------------
+// Alternative version with more detailed filtering options and pagination
 const getAllChildren = asyncHandler(async (req, res, next) => {
   try {
-    const parentId = req.parent.id;
+    // Check if admin is making the request
+    if (!req.admin) {
+      return next(new ErrorHandler("Unauthorized access. Admin privileges required", 401));
+    }
 
-    const parent = await models.Parent.findByPk(parentId, {
-      include: [
-        {
-          model: models.Child,
-          as: "children",
-          attributes: [
-            "id",
-            "username",
-            "name",
-            "age",
-            "gender",
-            "profilePicture",
-            "coinBalance",
-            "hasBlogAccess",
-            "isPublicAccount",
-            "deviceSharingMode",
-            "createdAt",
-            "updatedAt",
-          ],
-        },
-      ],
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Optional query parameters for filtering
+    const { 
+      minAge, 
+      maxAge, 
+      gender, 
+      minGoalCompletion, 
+      minTaskCompletion,
+      parentId,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC'
+    } = req.query;
+
+    let whereClause = {};
+    
+    if (minAge || maxAge) {
+      whereClause.age = {};
+      if (minAge) whereClause.age[Op.gte] = parseInt(minAge);
+      if (maxAge) whereClause.age[Op.lte] = parseInt(maxAge);
+    }
+    
+    if (gender) {
+      whereClause.gender = gender;
+    }
+
+    if (parentId) {
+      whereClause.parentId = parentId;
+    }
+
+    // Search functionality
+    if (search) {
+      whereClause[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { username: { [Op.iLike]: `%${search}%` } }
+      ];
+    }
+
+    // Validate sortBy field
+    const allowedSortFields = ['name', 'age', 'createdAt', 'updatedAt', 'coinBalance', 'username'];
+    const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    const sortDirection = ['ASC', 'DESC'].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
+
+    // Get total count for pagination (before applying limit/offset)
+    const totalCount = await models.Child.count({
+      where: whereClause,
     });
 
-    if (!parent) {
-      return next(new ErrorHandler("Parent not found", 404));
+    const children = await models.Child.findAll({
+      where: whereClause,
+      limit: limit,
+      offset: offset,
+      attributes: [
+        "id",
+        "username",
+        "name", 
+        "age",
+        "gender",
+        "profilePicture",
+        "coinBalance",
+        "hasBlogAccess",
+        "isPublicAccount",
+        "deviceSharingMode",
+        "createdAt",
+        "updatedAt",
+      ],
+      include: [
+        {
+          model: models.Parent,
+          as: "parent",
+          attributes: ["id", "name", "email"],
+        },
+        {
+          model: models.Goal,
+          as: "goals",
+          attributes: ["id", "title", "status", "type", "completedAt", "approvedAt"],
+        },
+        {
+          model: models.Task,
+          as: "Tasks", // Changed from "Task" to "Tasks" to match the response
+          attributes: ["id", "status", "completedAt", "approvedAt", "rewardCoins"],
+          include: [
+            {
+              model: models.TaskTemplate,
+              attributes: ["id", "title"]
+            }
+          ]
+        },
+      ],
+      order: [[sortField, sortDirection]]
+    });
+
+    // Transform and filter based on completion rates if specified
+    let childrenWithStats = children.map(child => {
+      const childData = child.toJSON();
+      
+      const totalGoals = childData.goals ? childData.goals.length : 0;
+      const completedGoals = childData.goals 
+        ? childData.goals.filter(goal => goal.status === 'COMPLETED' || goal.status === 'APPROVED').length 
+        : 0;
+      const goalsCompletionPercentage = totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0;
+
+      // Calculate task (chores) statistics  
+      const totalTasks = childData.Tasks ? childData.Tasks.length : 0;
+      const completedTasks = childData.Tasks 
+        ? childData.Tasks.filter(task => task.status === 'COMPLETED' || task.status === 'APPROVED').length 
+        : 0;
+      const tasksCompletionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+      return {
+        ...childData,
+        goalsStats: {
+          completed: completedGoals,
+          total: totalGoals,
+          completionPercentage: goalsCompletionPercentage,
+          displayText: `${completedGoals}/${totalGoals}`
+        },
+        tasksStats: {
+          completed: completedTasks,
+          total: totalTasks,
+          completionPercentage: tasksCompletionPercentage,
+          displayText: `${completedTasks}/${totalTasks}`
+        },
+        goals: undefined,
+        Tasks: undefined, // Changed from Task to Tasks
+      };
+    });
+
+    // Apply completion rate filters after getting the data (since these are calculated fields)
+    if (minGoalCompletion) {
+      childrenWithStats = childrenWithStats.filter(child => 
+        child.goalsStats.completionPercentage >= parseInt(minGoalCompletion)
+      );
     }
+
+    if (minTaskCompletion) {
+      childrenWithStats = childrenWithStats.filter(child => 
+        child.tasksStats.completionPercentage >= parseInt(minTaskCompletion)
+      );
+    }
+
+    // Calculate pagination info
+    const totalPages = Math.ceil(totalCount / limit);
+    const hasNextPage = page < totalPages;
+    const hasPrevPage = page > 1;
 
     return res.status(200).json({
       success: true,
-      children: parent.children,
+      children: childrenWithStats,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalItems: totalCount,
+        itemsPerPage: limit,
+        hasNextPage: hasNextPage,
+        hasPrevPage: hasPrevPage,
+        nextPage: hasNextPage ? page + 1 : null,
+        prevPage: hasPrevPage ? page - 1 : null,
+        startIndex: offset + 1,
+        endIndex: Math.min(offset + limit, totalCount)
+      },
+      filters: {
+        minAge,
+        maxAge,
+        gender,
+        minGoalCompletion,
+        minTaskCompletion,
+        parentId,
+        search,
+        sortBy: sortField,
+        sortOrder: sortDirection
+      },
+      summary: {
+        totalChildrenInDatabase: totalCount,
+        childrenOnCurrentPage: childrenWithStats.length,
+        averageGoalCompletion: childrenWithStats.length > 0 
+          ? Math.round(childrenWithStats.reduce((sum, child) => sum + child.goalsStats.completionPercentage, 0) / childrenWithStats.length)
+          : 0,
+        averageTaskCompletion: childrenWithStats.length > 0 
+          ? Math.round(childrenWithStats.reduce((sum, child) => sum + child.tasksStats.completionPercentage, 0) / childrenWithStats.length)
+          : 0,
+      }
     });
   } catch (error) {
     return next(new ErrorHandler(error.message, 500));
@@ -1638,6 +1797,56 @@ const getChildAnalytics = async (req, res) => {
   }
 };
 
+const getAllParents = asyncHandler(async (req, res, next) => {
+  try {
+    // Check if admin is making the request
+    if (!req.admin) {
+      return next(new ErrorHandler("Unauthorized access. Admin privileges required", 401));
+    }
+
+    const parents = await models.Parent.findAll({
+      attributes: [
+        "id",
+        "name",
+        "email",
+        "isEmailVerified",
+        "country",
+        "currency",
+        "image",
+        "isActive",
+        "createdAt",
+        "updatedAt",
+      ],
+      include: [
+        {
+          model: models.Child,
+          as: "children",
+          attributes: ["id"], // Only get child IDs to count them
+        },
+      ],
+    });
+
+    // Transform the data to include child count
+    const parentsWithChildCount = parents.map(parent => {
+      const parentData = parent.toJSON();
+      return {
+        ...parentData,
+        childCount: parentData.children ? parentData.children.length : 0,
+        children: undefined, // Remove children array from response
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      parents: parentsWithChildCount,
+      totalParents: parentsWithChildCount.length,
+    });
+  } catch (error) {
+    return next(new ErrorHandler(error.message, 500));
+  }
+});
+
+
 module.exports = {
   googleLogin,
   signup,
@@ -1658,5 +1867,6 @@ module.exports = {
   deleteChldAccount,
   deleteProfile,
   getParentAnalytics,
-  getChildAnalytics
+  getChildAnalytics,
+  getAllParents
 };
