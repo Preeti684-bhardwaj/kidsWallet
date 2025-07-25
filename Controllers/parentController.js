@@ -1805,6 +1805,23 @@ const getAllParents = asyncHandler(async (req, res, next) => {
       return next(new ErrorHandler("Unauthorized access. Admin privileges required", 401));
     }
 
+    // Extract pagination parameters from query
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Validate pagination parameters
+    if (page < 1) {
+      return next(new ErrorHandler("Page number must be greater than 0", 400));
+    }
+    if (limit < 1 || limit > 100) {
+      return next(new ErrorHandler("Limit must be between 1 and 100", 400));
+    }
+
+    // Get total count for pagination metadata
+    const totalCount = await models.Parent.count();
+
+    // Fetch parents with pagination
     const parents = await models.Parent.findAll({
       attributes: [
         "id",
@@ -1825,6 +1842,9 @@ const getAllParents = asyncHandler(async (req, res, next) => {
           attributes: ["id"], // Only get child IDs to count them
         },
       ],
+      limit,
+      offset,
+      order: [['createdAt', 'DESC']], // Optional: order by creation date
     });
 
     // Transform the data to include child count
@@ -1837,10 +1857,24 @@ const getAllParents = asyncHandler(async (req, res, next) => {
       };
     });
 
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalCount / limit);
+    const hasNextPage = page < totalPages;
+    const hasPrevPage = page > 1;
+
     return res.status(200).json({
       success: true,
       parents: parentsWithChildCount,
-      totalParents: parentsWithChildCount.length,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalCount,
+        limit,
+        hasNextPage,
+        hasPrevPage,
+        nextPage: hasNextPage ? page + 1 : null,
+        prevPage: hasPrevPage ? page - 1 : null,
+      },
     });
   } catch (error) {
     return next(new ErrorHandler(error.message, 500));

@@ -9,6 +9,7 @@ const models = {
     Streak: require('./streakModal')(db.sequelize, db.Sequelize.DataTypes),
     TaskTemplate: require('./taskTemplateModal')(db.sequelize, db.Sequelize.DataTypes),
     Task: require('./taskModal')(db.sequelize, db.Sequelize.DataTypes),
+    Asset: require('./assetMoadal')(db.sequelize, db.Sequelize.DataTypes),
     // GoalTemplate: require('./goalTemplateModal')(db.sequelize, db.Sequelize.DataTypes),
     Goal: require('./goalModal')(db.sequelize, db.Sequelize.DataTypes),
     Notification: require('./notificationModal')(db.sequelize, db.Sequelize.DataTypes),
@@ -61,6 +62,9 @@ models.TaskTemplate.belongsTo(models.Parent, { foreignKey: 'userId' });
 //------------------admin tasktemplate relation-------------------------------
 models.Admin.hasMany(models.TaskTemplate, { foreignKey: 'adminId' , onDelete: 'CASCADE', hooks: true});
 models.TaskTemplate.belongsTo(models.Admin, { foreignKey: 'adminId' });
+//------------------admin asset relation-------------------------------
+models.Admin.hasMany(models.Asset, { foreignKey: 'adminId' , onDelete: 'CASCADE', hooks: true});
+models.Asset.belongsTo(models.Admin, { foreignKey: 'adminId' });
 //------------------Task Template relationships-----------------------------------
 models.TaskTemplate.hasMany(models.Task, { foreignKey: 'taskTemplateId' });
 models.Task.belongsTo(models.TaskTemplate, { foreignKey: 'taskTemplateId' });

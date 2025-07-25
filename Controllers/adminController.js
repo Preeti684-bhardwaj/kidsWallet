@@ -9,6 +9,8 @@ const {
   isValidPassword,
   isValidLength,
 } = require("../Validators/parentValidation");
+const { uploadFile ,deleteFile} = require("../Utils/cdnImplementation");
+const { validateFiles } = require("../Validators/assetValidation");
 const ErrorHandler = require("../Utils/errorHandle");
 const asyncHandler = require("../Utils/asyncHandler");
 
@@ -377,6 +379,269 @@ const deleteProfile = asyncHandler(async (req, res, next) => {
   }
 });
 
+//-----------------upload to files CDN------------------------------------------
+
+const uploadContent = asyncHandler(async (req, res, next) => {
+  try {
+    // Validate file request
+    if (!req.files || req.files.length === 0) {
+      return next(new ErrorHandler("No files uploaded", 400));
+    }
+
+    // Validate file type and size if needed
+    const fileError = validateFiles(req.files);
+    if (fileError) {
+      return next(new ErrorHandler(fileError, 400));
+    }
+
+    // Array to store upload results
+    const uploadResults = [];
+    const savedAssets = [];
+
+    // Process each uploaded file
+    for (const file of req.files) {
+      try {
+        // Upload to CDN
+        const cdnResult = await uploadFile(file);
+
+        // Prepare upload result
+        const uploadData = {
+          fileName: cdnResult.filename,
+          originalName: cdnResult.originalName,
+          fileType: cdnResult.type,
+          fileSize: cdnResult.size,
+          cdnUrl: cdnResult.url,
+          uploadedAt: new Date().toISOString(),
+        };
+
+        // Save to Asset table
+        const asset = await models.Asset.create({
+          adminId: req.admin?.id, // assuming admin ID comes from authenticated user
+          assetData: {
+            fileName: cdnResult.filename,
+            originalName: cdnResult.originalName,
+            fileType: cdnResult.type,
+            fileSize: cdnResult.size,
+            cdnUrl: cdnResult.url,
+            uploadedAt: new Date().toISOString(),
+          }
+        });
+
+        uploadResults.push(uploadData);
+        // savedAssets.push(asset);
+
+      } catch (uploadError) {
+        console.error(`Error uploading file ${file.originalname}:`, uploadError);
+        // Optional: you can choose to stop processing or continue
+        return next(new ErrorHandler(`Failed to upload ${file.originalname}`, 500));
+      }
+    }
+
+    // Respond with upload results and saved assets
+    return res.status(200).json({
+      success: true,
+      message: `Successfully uploaded ${uploadResults.length} file(s)`,
+      data: {
+        uploads: uploadResults,
+        // assets: savedAssets
+      }
+    });
+
+  } catch (error) {
+    console.error("Upload Content Error:", error);
+    return next(new ErrorHandler("Upload failed", 500));
+  }
+});
+
+// Get all assets
+const getAllAssets = asyncHandler(async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const adminId = req.admin?.id; // Assuming admin ID comes from authenticated user 
+    
+    // Build where clause
+    const whereClause = {};
+    if (adminId) {
+      whereClause.adminId = adminId;
+    }
+
+    // Calculate offset for pagination
+    const offset = (page - 1) * limit;
+
+    // Get assets with pagination
+    const { count, rows: assets } = await models.Asset.findAndCountAll({
+      where: whereClause,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [['createdAt', 'DESC']], // Latest first
+    });
+
+    // Calculate total pages
+    const totalPages = Math.ceil(count / limit);
+
+    return res.status(200).json({
+      success: true,
+      message: "Assets retrieved successfully",
+      data: {
+        assets,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages,
+          totalItems: count,
+          itemsPerPage: parseInt(limit),
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1,
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Get All Assets Error:", error);
+    return next(new ErrorHandler("Failed to retrieve assets", 500));
+  }
+});
+
+// Get single asset by ID
+const getAssetById = asyncHandler(async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ID format (UUID)
+    // if (!id || !isValidUUID(id)) {
+    //   return next(new ErrorHandler("Invalid asset ID format", 400));
+    // }
+
+    // Find asset by ID
+    const asset = await models.Asset.findByPk(id);
+
+    if (!asset) {
+      return next(new ErrorHandler("Asset not found", 404));
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Asset retrieved successfully",
+      data: asset
+    });
+
+  } catch (error) {
+    console.error("Get Asset By ID Error:", error);
+    return next(new ErrorHandler("Failed to retrieve asset", 500));
+  }
+});
+
+const deleteContent = asyncHandler(async (req, res, next) => {
+  try {
+    const { fileName } = req.query;
+    const adminId = req.admin?.id;
+
+    // Validate fileName
+    if (!fileName) {
+      return next(new ErrorHandler("File name is required in query parameters", 400));
+    }
+
+    // Find all assets for this admin
+    const assets = await models.Asset.findAll({
+      where: { adminId: adminId }
+    });
+
+    // Find the specific asset with the matching fileName
+    const asset = assets.find(asset => 
+      asset.assetData && asset.assetData.fileName === fileName
+    );
+
+    if (!asset) {
+      return next(new ErrorHandler('File not found in your assets.', 404));
+    }
+
+    let cdnDeletionStatus = "skipped";
+
+    try {
+      // Try to delete from CDN first
+      await deleteFile(fileName);
+      cdnDeletionStatus = "success";
+    } catch (cdnError) {
+      console.error("CDN deletion error:", cdnError);
+      
+      // If file not found in CDN, continue with database deletion
+      if (cdnError.message.includes("not found") || cdnError.message.includes("NotFound")) {
+        console.log(`File ${fileName} not found in CDN, continuing with database deletion`);
+        cdnDeletionStatus = "file_not_found_in_cdn";
+      } else {
+        // For other CDN errors, fail the operation
+        return next(new ErrorHandler(`CDN deletion failed: ${cdnError.message}`, 500));
+      }
+    }
+
+    // Delete the database record
+    await asset.destroy();
+
+    return res.status(200).json({
+      success: true,
+      message: "Asset deleted successfully",
+      data: {
+        deletedAsset: {
+          id: asset.id,
+          fileName: asset.assetData?.fileName,
+          originalName: asset.assetData?.originalName
+        },
+        cdnDeletionStatus
+      }
+    });
+
+  } catch (error) {
+    console.error("Delete Content Error:", error);
+    return next(new ErrorHandler(`Deletion failed: ${error.message}`, 500));
+  }
+});
+
+// // Get assets by admin ID
+// const getAssetsByAdmin = asyncHandler(async (req, res, next) => {
+//   try {
+//     const { adminId } = req.params;
+//     const { page = 1, limit = 10 } = req.query;
+
+//     // Validate admin ID format (UUID)
+//     if (!adminId || !isValidUUID(adminId)) {
+//       return next(new ErrorHandler("Invalid admin ID format", 400));
+//     }
+
+//     // Calculate offset for pagination
+//     const offset = (page - 1) * limit;
+
+//     // Get assets for specific admin
+//     const { count, rows: assets } = await Asset.findAndCountAll({
+//       where: { adminId },
+//       limit: parseInt(limit),
+//       offset: parseInt(offset),
+//       order: [['createdAt', 'DESC']],
+//     });
+
+//     // Calculate total pages
+//     const totalPages = Math.ceil(count / limit);
+
+//     return res.status(200).json({
+//       success: true,
+//       message: `Assets for admin ${adminId} retrieved successfully`,
+//       data: {
+//         assets,
+//         pagination: {
+//           currentPage: parseInt(page),
+//           totalPages,
+//           totalItems: count,
+//           itemsPerPage: parseInt(limit),
+//           hasNextPage: page < totalPages,
+//           hasPrevPage: page > 1,
+//         }
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error("Get Assets By Admin Error:", error);
+//     return next(new ErrorHandler("Failed to retrieve admin assets", 500));
+//   }
+// });
+
 module.exports = {
   signup,
   login,
@@ -386,4 +651,9 @@ module.exports = {
 //   createChild,
   deleteUserByEmail,
   deleteProfile,
+  uploadContent,
+  getAllAssets,
+  getAssetById,
+  deleteContent,
+//   getAssetsByAdmin
 };
