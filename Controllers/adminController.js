@@ -403,12 +403,13 @@ const uploadContent = asyncHandler(async (req, res, next) => {
       try {
         // Upload to CDN
         const cdnResult = await uploadFile(file);
+console.log("CDN Result:", cdnResult);
 
         // Prepare upload result
         const uploadData = {
           fileName: cdnResult.filename,
           originalName: cdnResult.originalName,
-          fileType: cdnResult.type,
+          fileType: cdnResult.mimetype,
           fileSize: cdnResult.size,
           cdnUrl: cdnResult.url,
           uploadedAt: new Date().toISOString(),
@@ -420,7 +421,7 @@ const uploadContent = asyncHandler(async (req, res, next) => {
           assetData: {
             fileName: cdnResult.filename,
             originalName: cdnResult.originalName,
-            fileType: cdnResult.type,
+            fileType: cdnResult.mimetype,
             fileSize: cdnResult.size,
             cdnUrl: cdnResult.url,
             uploadedAt: new Date().toISOString(),
