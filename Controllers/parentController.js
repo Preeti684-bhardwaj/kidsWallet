@@ -1795,6 +1795,8 @@ const getParentAnalytics = async (req, res) => {
           id: parent.id,
           name: parent.name,
           email: parent.email,
+          image: parent.image,
+          joinedAt: parent.createdAt,
           totalChoresCreated,
           totalGoalsCreated,
         },
