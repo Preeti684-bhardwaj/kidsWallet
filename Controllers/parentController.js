@@ -304,7 +304,7 @@ const signup = asyncHandler(async (req, res, next) => {
     // Create user
     const parent = await models.Parent.create(
       {
-        email,
+        email:lowercaseEmail,
         // Only include phone fields if they're provided
         ...(cleanedPhone && cleanedCountryCode
           ? {
