@@ -863,9 +863,11 @@ const createTask = asyncHandler(async (req, res, next) => {
 const listTasks = asyncHandler(async (req, res, next) => {
   try {
     // Determine user type and ID
-    const userType = req.parent.obj ? "parent" : "child";
-    const userId = req.parent?.obj?.id || req.child?.obj?.id;
-
+    // console.log(req.child);
+    // console.log(req.parent);
+    const userType = req.parent ? "parent" : "child";
+    const userId = req.parent?.id || req.child?.id;
+    
     if (!userType || !userId) {
       return next(new ErrorHandler("Invalid authentication token", 401));
     }
