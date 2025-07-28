@@ -47,7 +47,9 @@ class ChildAnalyticsController {
           message: 'Child not found'
         });
       }
-
+const parent = await models.Parent.findByPk(child.parentId, {
+        attributes: ['id', 'name', 'email', 'image']
+      });
       // Get all analytics data
       const [
         choreStats,
@@ -69,7 +71,10 @@ class ChildAnalyticsController {
         childInfo: {
           id: child.id,
           name: child.name,
-          coinBalance: child.coinBalance
+          age: child.age,
+          profilePicture: child.profilePicture,
+          coinBalance: child.coinBalance,
+          parent:parent
         },
         chorePercentages: choreStats,
         goalPercentages: goalStats,

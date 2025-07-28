@@ -3,10 +3,17 @@ const models = require("../Modals/index");
 const db = require("../Configs/db/DbConfig");
 const { Op, literal } = require("sequelize");
 const sequelize = db.sequelize;
-const { generateToken, generateOTP ,verifyGoogleLogin ,getDateRange,getTimeSeriesData} = require("../Utils/parentHelper");
+const {
+  generateToken,
+  generateOTP,
+  verifyGoogleLogin,
+  getDateRange,
+  getTimeSeriesData,
+} = require("../Utils/parentHelper");
 const { phoneValidation } = require("../Utils/phoneValidation");
 const {
-  validateCurrencyCountry,COUNTRY_CURRENCY_MAP
+  validateCurrencyCountry,
+  COUNTRY_CURRENCY_MAP,
 } = require("../Validators/countryCurrencyValidation");
 const {
   isValidEmail,
@@ -34,8 +41,6 @@ const { uploadFile, deleteFile } = require("../Utils/cdnImplementation");
 //   phoneFlowId: KALEYRA_PHONE_FLOW_ID,
 // };
 // const QR_EXPIRY_TIME = 5 * 60 * 1000;
-
-
 
 // ---------------google login------------------------------------------------
 const googleLogin = asyncHandler(async (req, res, next) => {
@@ -143,12 +148,12 @@ const googleLogin = asyncHandler(async (req, res, next) => {
       id: parent.id,
       email: parent.email,
       name: parent.name,
-      tokenVersion: parent.tokenVersion || 0 // Include tokenVersion
+      tokenVersion: parent.tokenVersion || 0, // Include tokenVersion
     };
 
     // Generate token
     const accessToken = generateToken(userObj);
-    
+
     // Check if token generation failed
     if (accessToken && !accessToken.success && accessToken.status === 500) {
       return next(new ErrorHandler(accessToken.message, 500));
@@ -164,7 +169,7 @@ const googleLogin = asyncHandler(async (req, res, next) => {
         email: parent.email,
         name: parent.name,
         isEmailVerified: parent.isEmailVerified,
-      }
+      },
     });
   } catch (error) {
     // Ensure transaction is rolled back in case of any unexpected error
@@ -187,7 +192,7 @@ const signup = asyncHandler(async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
     const { name, countryCode, phone, email, gender, password } = req.body;
-    
+
     // Handle image upload if file is provided
     let imageData = null;
     if (req.file) {
@@ -198,10 +203,10 @@ const signup = asyncHandler(async (req, res, next) => {
           filename: uploadResult.filename,
           originalName: uploadResult.originalName,
           size: uploadResult.size,
-          mimetype: uploadResult.mimetype
+          mimetype: uploadResult.mimetype,
         };
       } catch (uploadError) {
-        console.error('Image upload failed:', uploadError);
+        console.error("Image upload failed:", uploadError);
         return next(new ErrorHandler("Image upload failed", 500));
       }
     }
@@ -210,7 +215,7 @@ const signup = asyncHandler(async (req, res, next) => {
     if ([name, email, password].some((field) => field?.trim() === "")) {
       return next(new ErrorHandler("All required fields must be filled", 400));
     }
-    
+
     // Validate input fields
     if (!name) {
       return next(new ErrorHandler("Name is missing", 400));
@@ -221,12 +226,12 @@ const signup = asyncHandler(async (req, res, next) => {
     if (!password) {
       return next(new ErrorHandler("Password is missing", 400));
     }
-    
+
     // Sanitize name: trim and reduce multiple spaces to a single space
     name.trim().replace(/\s+/g, " ");
     // Convert the email to lowercase for case-insensitive comparison
     const lowercaseEmail = email.trim().toLowerCase();
-    
+
     // Validate name
     const nameError = isValidLength(name);
     if (nameError) {
@@ -456,7 +461,7 @@ const verifyOTP = asyncHandler(async (req, res, next) => {
 
     // Update user details
     parent.isEmailVerified = true;
-    parent.isActive=true;
+    parent.isActive = true;
     parent.otp = null;
     parent.otpExpire = null;
     await parent.save();
@@ -467,12 +472,12 @@ const verifyOTP = asyncHandler(async (req, res, next) => {
       id: parent.id,
       email: parent.email,
       name: parent.name,
-      tokenVersion: parent.tokenVersion || 0 // Include tokenVersion
+      tokenVersion: parent.tokenVersion || 0, // Include tokenVersion
     };
-    
+
     // Generate token
     const accessToken = generateToken(userObj);
-    
+
     // Check if token generation failed
     if (accessToken && !accessToken.success && accessToken.status === 500) {
       return next(new ErrorHandler(accessToken.message, 500));
@@ -502,19 +507,19 @@ const login = asyncHandler(async (req, res, next) => {
     if ([email, password].some((field) => field?.trim() === "")) {
       return next(new ErrorHandler("All required fields must be filled", 400));
     }
-    
+
     const lowercaseEmail = email.trim().toLowerCase();
-    
+
     // Validate email format
     if (!isValidEmail(lowercaseEmail)) {
       return next(new ErrorHandler("Invalid email", 400));
     }
-    
+
     // Find user
     const parent = await models.Parent.findOne({
       where: { email: lowercaseEmail },
     });
-    
+
     if (!parent) {
       return next(new ErrorHandler("Parent not found", 404));
     }
@@ -537,12 +542,12 @@ const login = asyncHandler(async (req, res, next) => {
       id: parent.id,
       email: parent.email,
       name: parent.name,
-      tokenVersion: parent.tokenVersion || 0 // Include tokenVersion
+      tokenVersion: parent.tokenVersion || 0, // Include tokenVersion
     };
 
     // Generate token - handle both success and error cases
     const token = generateToken(userObj);
-    
+
     // Check if token generation failed
     if (token && !token.success && token.status === 500) {
       return next(new ErrorHandler(token.message, 500));
@@ -655,13 +660,13 @@ const resetPassword = asyncHandler(async (req, res, next) => {
     if (!otp || otp.trim() === "") {
       return next(new ErrorHandler("Missing OTP", 400));
     }
-    
+
     const lowercaseEmail = email.toLowerCase().trim();
     const passwordValidationResult = isValidPassword(password);
     if (passwordValidationResult) {
       return next(new ErrorHandler(passwordValidationResult, 400));
     }
-    
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -671,7 +676,7 @@ const resetPassword = asyncHandler(async (req, res, next) => {
         email: lowercaseEmail,
       },
     });
-    
+
     if (!parent) {
       return next(new ErrorHandler("Parent not found", 404));
     }
@@ -692,12 +697,13 @@ const resetPassword = asyncHandler(async (req, res, next) => {
       password: hashedPassword,
       tokenVersion: newTokenVersion, // This invalidates all existing tokens
       otp: null,
-      otpExpire: null
+      otpExpire: null,
     });
 
     return res.status(200).json({
       success: true,
-      message: "Password reset successfully. Please login with your new password.",
+      message:
+        "Password reset successfully. Please login with your new password.",
     });
   } catch (error) {
     return next(new ErrorHandler(error.message, 500));
@@ -754,9 +760,9 @@ const getParentDetailById = asyncHandler(async (req, res, next) => {
 const updateProfile = asyncHandler(async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const allowedFields = ["name", "country", "currency","image"];
+    const allowedFields = ["name", "country", "currency", "image"];
     const parent = req.parent;
-    
+
     // Handle image upload if file is provided
     let imageData = parent.image; // Keep existing image by default
     if (req.file) {
@@ -766,11 +772,11 @@ const updateProfile = asyncHandler(async (req, res, next) => {
           try {
             await deleteFile(parent.image.filename);
           } catch (deleteError) {
-            console.warn('Failed to delete old image:', deleteError.message);
+            console.warn("Failed to delete old image:", deleteError.message);
             // Continue with upload even if delete fails
           }
         }
-        
+
         // Upload new image
         const uploadResult = await uploadFile(req.file);
         imageData = {
@@ -778,11 +784,11 @@ const updateProfile = asyncHandler(async (req, res, next) => {
           filename: uploadResult.filename,
           originalName: uploadResult.originalName,
           size: uploadResult.size,
-          mimetype: uploadResult.mimetype
+          mimetype: uploadResult.mimetype,
         };
       } catch (uploadError) {
         await transaction.rollback();
-        console.error('Image upload failed:', uploadError);
+        console.error("Image upload failed:", uploadError);
         return next(new ErrorHandler("Image upload failed", 500));
       }
     }
@@ -802,23 +808,25 @@ const updateProfile = asyncHandler(async (req, res, next) => {
         )
       );
     }
-    
+
     // Prepare values for validation
     const newCountry = req.body.country || parent.country;
     const newCurrency = req.body.currency || parent.currency;
-    
+
     // Validate currency-country combination
     if (newCountry && newCurrency) {
       if (!validateCurrencyCountry(newCountry, newCurrency)) {
         await transaction.rollback();
         const validCurrencies = COUNTRY_CURRENCY_MAP[newCountry.toUpperCase()];
-        const errorMessage = validCurrencies 
-          ? `Invalid currency '${newCurrency}' for country '${newCountry}'. Valid currencies are: ${validCurrencies.join(', ')}`
+        const errorMessage = validCurrencies
+          ? `Invalid currency '${newCurrency}' for country '${newCountry}'. Valid currencies are: ${validCurrencies.join(
+              ", "
+            )}`
           : `Country '${newCountry}' is not supported`;
         return next(new ErrorHandler(errorMessage, 400));
       }
     }
-    
+
     // Sanitize and validate 'name' if present
     if (req.body.name) {
       const sanitizedName = req.body.name.trim().replace(/\s+/g, " ");
@@ -833,7 +841,7 @@ const updateProfile = asyncHandler(async (req, res, next) => {
     // Update only allowed fields if they exist
     if (req.body.country) parent.country = req.body.country;
     if (req.body.currency) parent.currency = req.body.currency;
-    
+
     // Update image data
     parent.image = imageData;
 
@@ -870,7 +878,7 @@ const createChild = asyncHandler(async (req, res, next) => {
       hasBlogAccess,
       deviceSharingMode,
     } = req.body;
-    
+
     // Handle profile picture upload if file is provided
     let profilePictureData = null;
     if (req.file) {
@@ -881,14 +889,14 @@ const createChild = asyncHandler(async (req, res, next) => {
           filename: uploadResult.filename,
           originalName: uploadResult.originalName,
           size: uploadResult.size,
-          mimetype: uploadResult.mimetype
+          mimetype: uploadResult.mimetype,
         };
       } catch (uploadError) {
-        console.error('Profile picture upload failed:', uploadError);
+        console.error("Profile picture upload failed:", uploadError);
         return next(new ErrorHandler("Profile picture upload failed", 500));
       }
     }
-    
+
     // Sanitize name: trim and reduce multiple spaces to a single space
     const sanitizedName = name.trim().replace(/\s+/g, " ");
     const sanatizedUsername = username.trim().replace(/\s+/g, " ");
@@ -899,28 +907,28 @@ const createChild = asyncHandler(async (req, res, next) => {
     if (nameError) {
       return next(new ErrorHandler(nameError, 400));
     }
-    
+
     // Validate username
     const usernameError = isValidUsernameLength(sanatizedUsername);
     if (usernameError) {
       console.log("usernameError", usernameError);
       return next(new ErrorHandler(usernameError, 400));
     }
-    
+
     // Validate age
     if (!age) {
       return next(new ErrorHandler("Age is required", 400));
     }
-    
+
     const ageNumber = parseInt(age);
     if (isNaN(ageNumber)) {
       return next(new ErrorHandler("Age must be a valid number", 400));
     }
-    
+
     if (ageNumber < 5 || ageNumber > 16) {
       return next(new ErrorHandler("Age must be between 5 and 16 years", 400));
     }
-    
+
     // Validate gender
     if (gender) {
       const allowedGender = ["male", "female", "other"];
@@ -930,7 +938,7 @@ const createChild = asyncHandler(async (req, res, next) => {
         );
       }
     }
-    
+
     // Validate the password and create a new user
     const passwordValidationResult = isValidPassword(password);
     if (passwordValidationResult) {
@@ -939,7 +947,7 @@ const createChild = asyncHandler(async (req, res, next) => {
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     // Validate parent exists
     const parent = await models.Parent.findByPk(parentId);
     if (!parent) {
@@ -951,7 +959,12 @@ const createChild = asyncHandler(async (req, res, next) => {
       where: { username: sanatizedUsername },
     });
     if (existingChild) {
-      return next(new ErrorHandler("Username already taken,Please choose a different username", 400));
+      return next(
+        new ErrorHandler(
+          "Username already taken,Please choose a different username",
+          400
+        )
+      );
     }
 
     // Create child account
@@ -999,9 +1012,11 @@ const createChild = asyncHandler(async (req, res, next) => {
 const getAllChildren = asyncHandler(async (req, res, next) => {
   try {
     // Check if admin is making the request
-    if (!req.admin) {
-      return next(new ErrorHandler("Unauthorized access. Admin privileges required", 401));
-    }
+    // if (!req.admin || !req.parent) {
+    //   return next(
+    //     new ErrorHandler("Unauthorized access.", 401)
+    //   );
+    // }
 
     // Pagination parameters
     const page = parseInt(req.query.page) || 1;
@@ -1009,46 +1024,60 @@ const getAllChildren = asyncHandler(async (req, res, next) => {
     const offset = (page - 1) * limit;
 
     // Optional query parameters for filtering
-    const { 
-      minAge, 
-      maxAge, 
-      gender, 
-      minGoalCompletion, 
+    const {
+      minAge,
+      maxAge,
+      gender,
+      minGoalCompletion,
       minTaskCompletion,
       parentId,
       search,
-      sortBy = 'createdAt',
-      sortOrder = 'DESC'
+      sortBy = "createdAt",
+      sortOrder = "DESC",
     } = req.query;
 
     let whereClause = {};
-    
+
     if (minAge || maxAge) {
       whereClause.age = {};
       if (minAge) whereClause.age[Op.gte] = parseInt(minAge);
       if (maxAge) whereClause.age[Op.lte] = parseInt(maxAge);
     }
-    
+
     if (gender) {
       whereClause.gender = gender;
     }
+    if (req.parent) {
+      whereClause.parentId = req.parent.id;
+    }
 
-    if (parentId) {
-      whereClause.parentId = parentId;
+    if (!req.parent && parentId) {
+      if (parentId) {
+        whereClause.parentId = parentId;
+      }
     }
 
     // Search functionality
     if (search) {
       whereClause[Op.or] = [
         { name: { [Op.iLike]: `%${search}%` } },
-        { username: { [Op.iLike]: `%${search}%` } }
+        { username: { [Op.iLike]: `%${search}%` } },
       ];
     }
 
     // Validate sortBy field
-    const allowedSortFields = ['name', 'age', 'createdAt', 'updatedAt', 'coinBalance', 'username'];
-    const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
-    const sortDirection = ['ASC', 'DESC'].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
+    const allowedSortFields = [
+      "name",
+      "age",
+      "createdAt",
+      "updatedAt",
+      "coinBalance",
+      "username",
+    ];
+    const sortField = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
+    const sortDirection = ["ASC", "DESC"].includes(sortOrder.toUpperCase())
+      ? sortOrder.toUpperCase()
+      : "DESC";
 
     // Get total count for pagination (before applying limit/offset)
     const totalCount = await models.Child.count({
@@ -1062,7 +1091,7 @@ const getAllChildren = asyncHandler(async (req, res, next) => {
       attributes: [
         "id",
         "username",
-        "name", 
+        "name",
         "age",
         "gender",
         "profilePicture",
@@ -1082,39 +1111,58 @@ const getAllChildren = asyncHandler(async (req, res, next) => {
         {
           model: models.Goal,
           as: "goals",
-          attributes: ["id", "title", "status", "type", "completedAt", "approvedAt"],
+          attributes: [
+            "id",
+            "title",
+            "status",
+            "type",
+            "completedAt",
+            "approvedAt",
+          ],
         },
         {
           model: models.Task,
           as: "Tasks", // Changed from "Task" to "Tasks" to match the response
-          attributes: ["id", "status", "completedAt", "approvedAt", "rewardCoins"],
+          attributes: [
+            "id",
+            "status",
+            "completedAt",
+            "approvedAt",
+            "rewardCoins",
+          ],
           include: [
             {
               model: models.TaskTemplate,
-              attributes: ["id", "title"]
-            }
-          ]
+              attributes: ["id", "title"],
+            },
+          ],
         },
       ],
-      order: [[sortField, sortDirection]]
+      order: [[sortField, sortDirection]],
     });
 
     // Transform and filter based on completion rates if specified
-    let childrenWithStats = children.map(child => {
+    let childrenWithStats = children.map((child) => {
       const childData = child.toJSON();
-      
-      const totalGoals = childData.goals ? childData.goals.length : 0;
-      const completedGoals = childData.goals 
-        ? childData.goals.filter(goal => goal.status === 'COMPLETED' || goal.status === 'APPROVED').length 
-        : 0;
-      const goalsCompletionPercentage = totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0;
 
-      // Calculate task (chores) statistics  
-      const totalTasks = childData.Tasks ? childData.Tasks.length : 0;
-      const completedTasks = childData.Tasks 
-        ? childData.Tasks.filter(task => task.status === 'COMPLETED' || task.status === 'APPROVED').length 
+      const totalGoals = childData.goals ? childData.goals.length : 0;
+      const completedGoals = childData.goals
+        ? childData.goals.filter(
+            (goal) => goal.status === "COMPLETED" || goal.status === "APPROVED"
+          ).length
         : 0;
-      const tasksCompletionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+      const goalsCompletionPercentage =
+        totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0;
+
+      // Calculate task (chores) statistics
+      const totalTasks = childData.Tasks ? childData.Tasks.length : 0;
+      const completedTasks = childData.Tasks
+        ? childData.Tasks.filter(
+            (task) => task.status === "COMPLETED" || task.status === "APPROVED"
+          ).length
+        : 0;
+      const tasksCompletionPercentage =
+        totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
       return {
         ...childData,
@@ -1122,13 +1170,13 @@ const getAllChildren = asyncHandler(async (req, res, next) => {
           completed: completedGoals,
           total: totalGoals,
           completionPercentage: goalsCompletionPercentage,
-          displayText: `${completedGoals}/${totalGoals}`
+          displayText: `${completedGoals}/${totalGoals}`,
         },
         tasksStats: {
           completed: completedTasks,
           total: totalTasks,
           completionPercentage: tasksCompletionPercentage,
-          displayText: `${completedTasks}/${totalTasks}`
+          displayText: `${completedTasks}/${totalTasks}`,
         },
         goals: undefined,
         Tasks: undefined, // Changed from Task to Tasks
@@ -1137,14 +1185,16 @@ const getAllChildren = asyncHandler(async (req, res, next) => {
 
     // Apply completion rate filters after getting the data (since these are calculated fields)
     if (minGoalCompletion) {
-      childrenWithStats = childrenWithStats.filter(child => 
-        child.goalsStats.completionPercentage >= parseInt(minGoalCompletion)
+      childrenWithStats = childrenWithStats.filter(
+        (child) =>
+          child.goalsStats.completionPercentage >= parseInt(minGoalCompletion)
       );
     }
 
     if (minTaskCompletion) {
-      childrenWithStats = childrenWithStats.filter(child => 
-        child.tasksStats.completionPercentage >= parseInt(minTaskCompletion)
+      childrenWithStats = childrenWithStats.filter(
+        (child) =>
+          child.tasksStats.completionPercentage >= parseInt(minTaskCompletion)
       );
     }
 
@@ -1166,7 +1216,7 @@ const getAllChildren = asyncHandler(async (req, res, next) => {
         nextPage: hasNextPage ? page + 1 : null,
         prevPage: hasPrevPage ? page - 1 : null,
         startIndex: offset + 1,
-        endIndex: Math.min(offset + limit, totalCount)
+        endIndex: Math.min(offset + limit, totalCount),
       },
       filters: {
         minAge,
@@ -1177,18 +1227,30 @@ const getAllChildren = asyncHandler(async (req, res, next) => {
         parentId,
         search,
         sortBy: sortField,
-        sortOrder: sortDirection
+        sortOrder: sortDirection,
       },
       summary: {
         totalChildrenInDatabase: totalCount,
         childrenOnCurrentPage: childrenWithStats.length,
-        averageGoalCompletion: childrenWithStats.length > 0 
-          ? Math.round(childrenWithStats.reduce((sum, child) => sum + child.goalsStats.completionPercentage, 0) / childrenWithStats.length)
-          : 0,
-        averageTaskCompletion: childrenWithStats.length > 0 
-          ? Math.round(childrenWithStats.reduce((sum, child) => sum + child.tasksStats.completionPercentage, 0) / childrenWithStats.length)
-          : 0,
-      }
+        averageGoalCompletion:
+          childrenWithStats.length > 0
+            ? Math.round(
+                childrenWithStats.reduce(
+                  (sum, child) => sum + child.goalsStats.completionPercentage,
+                  0
+                ) / childrenWithStats.length
+              )
+            : 0,
+        averageTaskCompletion:
+          childrenWithStats.length > 0
+            ? Math.round(
+                childrenWithStats.reduce(
+                  (sum, child) => sum + child.tasksStats.completionPercentage,
+                  0
+                ) / childrenWithStats.length
+              )
+            : 0,
+      },
     });
   } catch (error) {
     return next(new ErrorHandler(error.message, 500));
@@ -1261,7 +1323,7 @@ const updateChildProfile = asyncHandler(async (req, res, next) => {
         )
       );
     }
-    
+
     // Handle profile picture upload if file is provided
     let profilePictureData = child.profilePicture; // Keep existing image by default
     if (req.file) {
@@ -1271,11 +1333,14 @@ const updateChildProfile = asyncHandler(async (req, res, next) => {
           try {
             await deleteFile(child.profilePicture.filename);
           } catch (deleteError) {
-            console.warn('Failed to delete old profile picture:', deleteError.message);
+            console.warn(
+              "Failed to delete old profile picture:",
+              deleteError.message
+            );
             // Continue with upload even if delete fails
           }
         }
-        
+
         // Upload new profile picture
         const uploadResult = await uploadFile(req.file);
         profilePictureData = {
@@ -1283,11 +1348,11 @@ const updateChildProfile = asyncHandler(async (req, res, next) => {
           filename: uploadResult.filename,
           originalName: uploadResult.originalName,
           size: uploadResult.size,
-          mimetype: uploadResult.mimetype
+          mimetype: uploadResult.mimetype,
         };
       } catch (uploadError) {
         await transaction.rollback();
-        console.error('Profile picture upload failed:', uploadError);
+        console.error("Profile picture upload failed:", uploadError);
         return next(new ErrorHandler("Profile picture upload failed", 500));
       }
     }
@@ -1419,7 +1484,7 @@ const updateChildProfile = asyncHandler(async (req, res, next) => {
 const getParentNotifications = asyncHandler(async (req, res, next) => {
   try {
     const parentId = req.parent.id;
-    
+
     // Extract query parameters
     const {
       page = 1,
@@ -1429,8 +1494,8 @@ const getParentNotifications = asyncHandler(async (req, res, next) => {
       relatedItemType,
       startDate,
       endDate,
-      sortBy = 'createdAt',
-      sortOrder = 'DESC'
+      sortBy = "createdAt",
+      sortOrder = "DESC",
     } = req.query;
 
     // Calculate offset for pagination
@@ -1439,7 +1504,7 @@ const getParentNotifications = asyncHandler(async (req, res, next) => {
     // Build where clause
     const whereClause = {
       recipientId: parentId,
-      recipientType: "parent"
+      recipientType: "parent",
     };
 
     // Apply filters
@@ -1448,7 +1513,7 @@ const getParentNotifications = asyncHandler(async (req, res, next) => {
     }
 
     if (isRead !== undefined) {
-      whereClause.isRead = isRead === 'true';
+      whereClause.isRead = isRead === "true";
     }
 
     if (relatedItemType) {
@@ -1467,17 +1532,20 @@ const getParentNotifications = asyncHandler(async (req, res, next) => {
     }
 
     // Validate sort parameters
-    const allowedSortFields = ['createdAt', 'updatedAt', 'type', 'isRead'];
-    const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
-    const sortDirection = ['ASC', 'DESC'].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
+    const allowedSortFields = ["createdAt", "updatedAt", "type", "isRead"];
+    const sortField = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
+    const sortDirection = ["ASC", "DESC"].includes(sortOrder.toUpperCase())
+      ? sortOrder.toUpperCase()
+      : "DESC";
 
     // Find notifications with pagination
-    const { count, rows: notifications } = await models.Notification.findAndCountAll({
-      where: whereClause,
-      order: [[sortField, sortDirection]],
-      limit: parseInt(limit),
-      offset: offset,
-    });
+    const { count, rows: notifications } =
+      await models.Notification.findAndCountAll({
+        where: whereClause,
+        order: [[sortField, sortDirection]],
+        limit: parseInt(limit),
+        offset: offset,
+      });
 
     // Calculate pagination metadata
     const totalPages = Math.ceil(count / parseInt(limit));
@@ -1496,7 +1564,7 @@ const getParentNotifications = asyncHandler(async (req, res, next) => {
         hasNextPage,
         hasPrevPage,
         nextPage: hasNextPage ? parseInt(page) + 1 : null,
-        prevPage: hasPrevPage ? parseInt(page) - 1 : null
+        prevPage: hasPrevPage ? parseInt(page) - 1 : null,
       },
       filters: {
         type,
@@ -1505,8 +1573,8 @@ const getParentNotifications = asyncHandler(async (req, res, next) => {
         startDate,
         endDate,
         sortBy: sortField,
-        sortOrder: sortDirection
-      }
+        sortOrder: sortDirection,
+      },
     });
   } catch (error) {
     console.error("Error retrieving notifications:", error);
@@ -1595,25 +1663,25 @@ const deleteProfile = asyncHandler(async (req, res, next) => {
 const getParentAnalytics = async (req, res) => {
   try {
     const { parentId } = req.params;
-    const { childId, timeFilter = 'week' } = req.query;
+    const { childId, timeFilter = "week" } = req.query;
 
     // Validate parent exists
     const parent = await models.Parent.findByPk(parentId);
     if (!parent) {
       return res.status(404).json({
         success: false,
-        message: 'Parent not found'
+        message: "Parent not found",
       });
     }
 
     // 1. Total chores/tasks created by parent
     const totalChoresCreated = await models.Task.count({
-      where: { parentId }
+      where: { parentId },
     });
 
     // 2. Total goals created by parent (goals now have direct parentId)
     const totalGoalsCreated = await models.Goal.count({
-      where: { parentId }
+      where: { parentId },
     });
 
     // 3. Get all children of this parent
@@ -1623,19 +1691,19 @@ const getParentAnalytics = async (req, res) => {
         {
           model: models.Task,
           required: false,
-          attributes: ['id', 'status']
+          attributes: ["id", "status"],
         },
         {
           model: models.Goal,
-          as: 'goals',
+          as: "goals",
           required: false,
-          attributes: ['id', 'status']
-        }
-      ]
+          attributes: ["id", "status"],
+        },
+      ],
     });
 
     // Process children data
-    const childrenAnalytics = children.map(child => {
+    const childrenAnalytics = children.map((child) => {
       const tasks = child.Tasks || [];
       const goals = child.goals || [];
 
@@ -1647,49 +1715,77 @@ const getParentAnalytics = async (req, res) => {
         profilePicture: child.profilePicture,
         coinBalance: child.coinBalance,
         taskStats: {
-          completed: tasks.filter(t => t.status === 'COMPLETED').length,
-          pending: tasks.filter(t => t.status === 'PENDING').length,
-          overdue: tasks.filter(t => t.status === 'OVERDUE').length,
-          rejected: tasks.filter(t => t.status === 'REJECTED').length,
-          approved: tasks.filter(t => t.status === 'APPROVED').length,
-          total: tasks.length
+          completed: tasks.filter((t) => t.status === "COMPLETED").length,
+          pending: tasks.filter((t) => t.status === "PENDING").length,
+          overdue: tasks.filter((t) => t.status === "OVERDUE").length,
+          rejected: tasks.filter((t) => t.status === "REJECTED").length,
+          approved: tasks.filter((t) => t.status === "APPROVED").length,
+          total: tasks.length,
         },
         goalStats: {
-          completed: goals.filter(g => g.status === 'COMPLETED').length,
-          pending: goals.filter(g => g.status === 'PENDING').length,
-          rejected: goals.filter(g => g.status === 'REJECTED').length,
-          approved: goals.filter(g => g.status === 'APPROVED').length,
-          total: goals.length
-        }
+          completed: goals.filter((g) => g.status === "COMPLETED").length,
+          pending: goals.filter((g) => g.status === "PENDING").length,
+          rejected: goals.filter((g) => g.status === "REJECTED").length,
+          approved: goals.filter((g) => g.status === "APPROVED").length,
+          total: goals.length,
+        },
       };
     });
 
     // Filter by specific child if requested
-    const selectedChildData = childId 
-      ? childrenAnalytics.find(child => child.id === childId)
+    const selectedChildData = childId
+      ? childrenAnalytics.find((child) => child.id === childId)
       : null;
 
     // 4. Task approval/rejection analytics over time
-    const taskAnalytics = await getTimeSeriesData(parentId, 'Task', 'status', timeFilter);
+    const taskAnalytics = await getTimeSeriesData(
+      parentId,
+      "Task",
+      "status",
+      timeFilter
+    );
 
     // 5. Goal approval/rejection analytics over time
-    const goalAnalytics = await getTimeSeriesData(parentId, 'Goal', 'status', timeFilter);
+    const goalAnalytics = await getTimeSeriesData(
+      parentId,
+      "Goal",
+      "status",
+      timeFilter
+    );
 
     // Additional summary statistics
     const summaryStats = {
       totalTasks: {
-        pending: await models.Task.count({ where: { parentId, status: 'PENDING' } }),
-        completed: await models.Task.count({ where: { parentId, status: 'COMPLETED' } }),
-        approved: await models.Task.count({ where: { parentId, status: 'APPROVED' } }),
-        rejected: await models.Task.count({ where: { parentId, status: 'REJECTED' } }),
-        overdue: await models.Task.count({ where: { parentId, status: 'OVERDUE' } })
+        pending: await models.Task.count({
+          where: { parentId, status: "PENDING" },
+        }),
+        completed: await models.Task.count({
+          where: { parentId, status: "COMPLETED" },
+        }),
+        approved: await models.Task.count({
+          where: { parentId, status: "APPROVED" },
+        }),
+        rejected: await models.Task.count({
+          where: { parentId, status: "REJECTED" },
+        }),
+        overdue: await models.Task.count({
+          where: { parentId, status: "OVERDUE" },
+        }),
       },
       totalGoals: {
-        pending: await models.Goal.count({ where: { parentId, status: 'PENDING' } }),
-        completed: await models.Goal.count({ where: { parentId, status: 'COMPLETED' } }),
-        approved: await models.Goal.count({ where: { parentId, status: 'APPROVED' } }),
-        rejected: await models.Goal.count({ where: { parentId, status: 'REJECTED' } })
-      }
+        pending: await models.Goal.count({
+          where: { parentId, status: "PENDING" },
+        }),
+        completed: await models.Goal.count({
+          where: { parentId, status: "COMPLETED" },
+        }),
+        approved: await models.Goal.count({
+          where: { parentId, status: "APPROVED" },
+        }),
+        rejected: await models.Goal.count({
+          where: { parentId, status: "REJECTED" },
+        }),
+      },
     };
 
     res.status(200).json({
@@ -1700,7 +1796,7 @@ const getParentAnalytics = async (req, res) => {
           name: parent.name,
           email: parent.email,
           totalChoresCreated,
-          totalGoalsCreated
+          totalGoalsCreated,
         },
         children: childrenAnalytics,
         selectedChild: selectedChildData,
@@ -1709,17 +1805,16 @@ const getParentAnalytics = async (req, res) => {
         summaryStats,
         filters: {
           appliedTimeFilter: timeFilter,
-          selectedChildId: childId || null
-        }
-      }
+          selectedChildId: childId || null,
+        },
+      },
     });
-
   } catch (error) {
-    console.error('Error in getParentAnalytics:', error);
+    console.error("Error in getParentAnalytics:", error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error',
-      error: error.message
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
@@ -1734,24 +1829,24 @@ const getChildAnalytics = async (req, res) => {
       include: [
         {
           model: models.Task,
-          required: false
+          required: false,
         },
         {
           model: models.Goal,
-          as: 'goals',
-          required: false
+          as: "goals",
+          required: false,
         },
         {
           model: models.Streak,
-          required: false
-        }
-      ]
+          required: false,
+        },
+      ],
     });
 
     if (!child) {
       return res.status(404).json({
         success: false,
-        message: 'Child not found'
+        message: "Child not found",
       });
     }
 
@@ -1767,33 +1862,32 @@ const getChildAnalytics = async (req, res) => {
           age: child.age,
           username: child.username,
           profilePicture: child.profilePicture,
-          coinBalance: child.coinBalance
+          coinBalance: child.coinBalance,
         },
         taskStats: {
-          completed: tasks.filter(t => t.status === 'COMPLETED').length,
-          pending: tasks.filter(t => t.status === 'PENDING').length,
-          overdue: tasks.filter(t => t.status === 'OVERDUE').length,
-          rejected: tasks.filter(t => t.status === 'REJECTED').length,
-          approved: tasks.filter(t => t.status === 'APPROVED').length,
-          total: tasks.length
+          completed: tasks.filter((t) => t.status === "COMPLETED").length,
+          pending: tasks.filter((t) => t.status === "PENDING").length,
+          overdue: tasks.filter((t) => t.status === "OVERDUE").length,
+          rejected: tasks.filter((t) => t.status === "REJECTED").length,
+          approved: tasks.filter((t) => t.status === "APPROVED").length,
+          total: tasks.length,
         },
         goalStats: {
-          completed: goals.filter(g => g.status === 'COMPLETED').length,
-          pending: goals.filter(g => g.status === 'PENDING').length,
-          rejected: goals.filter(g => g.status === 'REJECTED').length,
-          approved: goals.filter(g => g.status === 'APPROVED').length,
-          total: goals.length
+          completed: goals.filter((g) => g.status === "COMPLETED").length,
+          pending: goals.filter((g) => g.status === "PENDING").length,
+          rejected: goals.filter((g) => g.status === "REJECTED").length,
+          approved: goals.filter((g) => g.status === "APPROVED").length,
+          total: goals.length,
         },
-        streak: child.Streak
-      }
+        streak: child.Streak,
+      },
     });
-
   } catch (error) {
-    console.error('Error in getChildAnalytics:', error);
+    console.error("Error in getChildAnalytics:", error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error',
-      error: error.message
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
@@ -1802,7 +1896,9 @@ const getAllParents = asyncHandler(async (req, res, next) => {
   try {
     // Check if admin is making the request
     if (!req.admin) {
-      return next(new ErrorHandler("Unauthorized access. Admin privileges required", 401));
+      return next(
+        new ErrorHandler("Unauthorized access. Admin privileges required", 401)
+      );
     }
 
     // Extract pagination parameters from query
@@ -1844,11 +1940,11 @@ const getAllParents = asyncHandler(async (req, res, next) => {
       ],
       limit,
       offset,
-      order: [['createdAt', 'DESC']], // Optional: order by creation date
+      order: [["createdAt", "DESC"]], // Optional: order by creation date
     });
 
     // Transform the data to include child count
-    const parentsWithChildCount = parents.map(parent => {
+    const parentsWithChildCount = parents.map((parent) => {
       const parentData = parent.toJSON();
       return {
         ...parentData,
@@ -1881,7 +1977,6 @@ const getAllParents = asyncHandler(async (req, res, next) => {
   }
 });
 
-
 module.exports = {
   googleLogin,
   signup,
@@ -1903,5 +1998,5 @@ module.exports = {
   deleteProfile,
   getParentAnalytics,
   getChildAnalytics,
-  getAllParents
+  getAllParents,
 };
