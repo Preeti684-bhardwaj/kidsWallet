@@ -62,6 +62,7 @@ const validateVariantData = (data) => {
     return !existing;
   };
 
+  
 module.exports = {
     validateVariantData,
     validateBarcodeUniqueness
