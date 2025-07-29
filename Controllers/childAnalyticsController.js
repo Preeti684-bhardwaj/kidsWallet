@@ -1,5 +1,6 @@
 const { Op } = require('sequelize');
 const models = require('../Modals/index'); // Adjust path as needed
+const { getChildCoinStats } = require('../Utils/transactionHelper');
 
 class ChildAnalyticsController {
   
@@ -47,9 +48,14 @@ class ChildAnalyticsController {
           message: 'Child not found'
         });
       }
-const parent = await models.Parent.findByPk(child.parentId, {
+
+      const parent = await models.Parent.findByPk(child.parentId, {
         attributes: ['id', 'name', 'email', 'image']
       });
+
+      // Get coin statistics
+      const coinStats = await getChildCoinStats(childId);
+
       // Get all analytics data
       const [
         choreStats,
@@ -57,14 +63,16 @@ const parent = await models.Parent.findByPk(child.parentId, {
         choreStatusCounts,
         goalStatusCounts,
         dailyChores,
-        periodStats
+        periodStats,
+        transactionHistory
       ] = await Promise.all([
         this.getChorePercentages(childId),
         this.getGoalPercentages(childId),
         this.getChoreStatusCounts(childId),
         this.getGoalStatusCounts(childId),
         this.getDailyChores(childId, date),
-        this.getPeriodStats(childId, period)
+        this.getPeriodStats(childId, period),
+        this.getRecentTransactions(childId, 10) // Get last 10 transactions
       ]);
 
       const analytics = {
@@ -73,8 +81,14 @@ const parent = await models.Parent.findByPk(child.parentId, {
           name: child.name,
           age: child.age,
           profilePicture: child.profilePicture,
-          coinBalance: child.coinBalance,
-          parent:parent
+          coinBalance: coinStats.coinBalance, // From transaction history
+          totalEarned: coinStats.totalEarned, // From transaction history
+          parent: parent
+        },
+        coinStats: {
+          currentBalance: coinStats.coinBalance,
+          totalEarned: coinStats.totalEarned,
+          totalSpent: coinStats.totalEarned - coinStats.coinBalance // Calculated difference
         },
         chorePercentages: choreStats,
         goalPercentages: goalStats,
@@ -82,6 +96,7 @@ const parent = await models.Parent.findByPk(child.parentId, {
         goalCounts: goalStatusCounts,
         dailyChores: dailyChores,
         periodAnalytics: periodStats,
+        recentTransactions: transactionHistory,
         generatedAt: new Date().toISOString()
       };
 
@@ -100,6 +115,143 @@ const parent = await models.Parent.findByPk(child.parentId, {
     }
   }
 
+    /**
+   * Get recent transactions for a child
+   */
+    async getRecentTransactions(childId, limit = 10) {
+      try {
+        const transactions = await models.Transaction.findAll({
+          where: { childId },
+          include: [
+            {
+              model: models.Task,
+              attributes: ['id'],
+              include: [
+                {
+                  model: models.TaskTemplate,
+                  attributes: ['title', 'image']
+                }
+              ],
+              required: false
+            }
+          ],
+          attributes: [
+            'id', 'amount', 'type', 'description', 'totalEarned', 
+            'coinBalance', 'createdAt'
+          ],
+          order: [['createdAt', 'DESC']],
+          limit: limit
+        });
+  
+        return transactions.map(transaction => ({
+          id: transaction.id,
+          amount: transaction.amount,
+          type: transaction.type,
+          description: transaction.description,
+          totalEarned: transaction.totalEarned,
+          coinBalance: transaction.coinBalance,
+          createdAt: transaction.createdAt,
+          task: transaction.Task ? {
+            id: transaction.Task.id,
+            title: transaction.Task.TaskTemplate?.title
+          } : null
+        }));
+  
+      } catch (error) {
+        console.error('Error in getRecentTransactions:', error);
+        throw error;
+      }
+    }
+  
+    /**
+     * Get earning statistics by type
+     */
+    async getEarningsByType(childId) {
+      try {
+        const earningTypes = ['task_reward', 'streak_bonus', 'credit', 'blog_reward', 'quiz_reward'];
+        
+        const earnings = await models.Transaction.findAll({
+          where: {
+            childId,
+            type: {
+              [Op.in]: earningTypes
+            }
+          },
+          attributes: [
+            'type',
+            [models.db.sequelize.fn('SUM', models.db.sequelize.col('amount')), 'totalAmount'],
+            [models.db.sequelize.fn('COUNT', '*'), 'count']
+          ],
+          group: ['type'],
+          raw: true
+        });
+  
+        const earningsBreakdown = {
+          task_reward: { amount: 0, count: 0 },
+          streak_bonus: { amount: 0, count: 0 },
+          credit: { amount: 0, count: 0 },
+          blog_reward: { amount: 0, count: 0 },
+          quiz_reward: { amount: 0, count: 0 }
+        };
+  
+        earnings.forEach(earning => {
+          earningsBreakdown[earning.type] = {
+            amount: parseInt(earning.totalAmount),
+            count: parseInt(earning.count)
+          };
+        });
+  
+        return earningsBreakdown;
+  
+      } catch (error) {
+        console.error('Error in getEarningsByType:', error);
+        throw error;
+      }
+    }
+  
+    /**
+     * Get spending statistics by type
+     */
+    async getSpendingByType(childId) {
+      try {
+        const spendingTypes = ['spending', 'investment'];
+        
+        const spending = await models.Transaction.findAll({
+          where: {
+            childId,
+            type: {
+              [Op.in]: spendingTypes
+            }
+          },
+          attributes: [
+            'type',
+            [models.db.sequelize.fn('SUM', models.db.sequelize.col('amount')), 'totalAmount'],
+            [models.db.sequelize.fn('COUNT', '*'), 'count']
+          ],
+          group: ['type'],
+          raw: true
+        });
+  
+        const spendingBreakdown = {
+          spending: { amount: 0, count: 0 },
+          investment: { amount: 0, count: 0 }
+        };
+  
+        spending.forEach(spend => {
+          spendingBreakdown[spend.type] = {
+            amount: Math.abs(parseInt(spend.totalAmount)), // Make positive for display
+            count: parseInt(spend.count)
+          };
+        });
+  
+        return spendingBreakdown;
+  
+      } catch (error) {
+        console.error('Error in getSpendingByType:', error);
+        throw error;
+      }
+    }
+    
   /**
    * Get chore completion and rejection percentages
    */

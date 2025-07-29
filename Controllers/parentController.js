@@ -304,7 +304,7 @@ const signup = asyncHandler(async (req, res, next) => {
     // Create user
     const parent = await models.Parent.create(
       {
-        email:lowercaseEmail,
+        email: lowercaseEmail,
         // Only include phone fields if they're provided
         ...(cleanedPhone && cleanedCountryCode
           ? {
@@ -879,6 +879,11 @@ const createChild = asyncHandler(async (req, res, next) => {
       deviceSharingMode,
     } = req.body;
 
+    // Validate required fields first
+    if (!name || !username) {
+      return next(new ErrorHandler("Name and username are required", 400));
+    }
+
     // Handle profile picture upload if file is provided
     let profilePictureData = null;
     if (req.file) {
@@ -899,8 +904,9 @@ const createChild = asyncHandler(async (req, res, next) => {
 
     // Sanitize name: trim and reduce multiple spaces to a single space
     const sanitizedName = name.trim().replace(/\s+/g, " ");
-    const sanatizedUsername = username.trim().replace(/\s+/g, " ");
-    console.log("sanatizeUsername", sanatizedUsername);
+    // Sanitize username: trim and remove all spaces (usernames shouldn't have spaces)
+    const sanitizedUsername = username.trim().replace(/\s+/g, "");
+    console.log("sanitizedUsername", sanitizedUsername);
 
     // Validate name
     const nameError = isValidLength(sanitizedName);
@@ -909,7 +915,7 @@ const createChild = asyncHandler(async (req, res, next) => {
     }
 
     // Validate username
-    const usernameError = isValidUsernameLength(sanatizedUsername);
+    const usernameError = isValidUsernameLength(sanitizedUsername);
     if (usernameError) {
       console.log("usernameError", usernameError);
       return next(new ErrorHandler(usernameError, 400));
@@ -932,21 +938,41 @@ const createChild = asyncHandler(async (req, res, next) => {
     // Validate gender
     if (gender) {
       const allowedGender = ["male", "female", "other"];
-      if (gender && (!gender || !allowedGender.includes(gender))) {
+      if (!allowedGender.includes(gender)) {
         return next(
           new ErrorHandler("Invalid input. Allowed: male, female, other.", 400)
         );
       }
     }
 
-    // Validate the password and create a new user
-    const passwordValidationResult = isValidPassword(password);
-    if (passwordValidationResult) {
-      return next(new ErrorHandler(passwordValidationResult, 400));
+    // Validate the password logic strictly:
+    // If deviceSharingMode is false, password is required
+    // If deviceSharingMode is true, password should not be provided
+    if (deviceSharingMode === "false" && (!password || password.trim() === "")) {
+      return next(
+        new ErrorHandler("Password is required when device sharing is disabled", 400)
+      );
     }
+    
+    // If deviceSharingMode is true and password is provided, reject it
+    if (deviceSharingMode === "true" && password && password.trim() !== "") {
+      return next(
+        new ErrorHandler("Password should not be provided when device sharing is enabled", 400)
+      );
+    }
+    
+    let hashedPassword = null;
+    // Hash password only if deviceSharingMode is false and password is provided
+    if (deviceSharingMode === "false" && password && password.trim() !== "") {
+      // Validate password
+      const passwordValidationResult = isValidPassword(password);
+      if (passwordValidationResult) {
+        return next(new ErrorHandler(passwordValidationResult, 400));
+      }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+      // Hash password
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
 
     // Validate parent exists
     const parent = await models.Parent.findByPk(parentId);
@@ -956,12 +982,12 @@ const createChild = asyncHandler(async (req, res, next) => {
 
     // Check if username already exists
     const existingChild = await models.Child.findOne({
-      where: { username: sanatizedUsername },
+      where: { username: sanitizedUsername },
     });
     if (existingChild) {
       return next(
         new ErrorHandler(
-          "Username already taken,Please choose a different username",
+          "Username already taken. Please choose a different username",
           400
         )
       );
@@ -973,7 +999,7 @@ const createChild = asyncHandler(async (req, res, next) => {
       age: ageNumber, // Use the validated number
       gender,
       profilePicture: profilePictureData, // Store as JSON
-      username: sanatizedUsername,
+      username: sanitizedUsername,
       password: hashedPassword || null,
       parentId,
       hasBlogAccess: hasBlogAccess || false,

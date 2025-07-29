@@ -8,6 +8,7 @@ const {
   sortRecurrenceDates,
   validateQueryParams,
 } = require("../Utils/taskHelper");
+const {getChildCoinStats}=require('../Utils/transactionHelper')
 const {
   isValidLength,
 } = require("../Validators/parentValidation");
@@ -1602,15 +1603,17 @@ const updateTaskTemplateAndTasks = asyncHandler(async (req, res, next) => {
 const updateTaskStatus = asyncHandler(async (req, res, next) => {
   const { taskId } = req.params;
   const { status, reason } = req.body;
-  // console.log(req.parent);
+  // Import the transaction helper at the top of your file
+  const { createTransactionWithBalance } = require('../Utils/transactionHelper');
+  
   console.log(req.child);
 
-  const userType = req.parent?.obj?.id
+  const userType = req.parent?.id
     ? "parent"
-    : req.child?.obj?.id
+    : req.child?.id
     ? "child"
     : null;
-  const userId = req.parent?.obj?.id || req.child?.obj?.id;
+  const userId = req.parent?.id || req.child?.id;
 
   try {
     // Validate status
@@ -1714,16 +1717,16 @@ const updateTaskStatus = asyncHandler(async (req, res, next) => {
           { transaction: t }
         );
 
-        // Award coins
-        await models.Transaction.create(
+        // Award coins using the new helper function
+        await createTransactionWithBalance(
           {
             childId: task.childId,
             taskId: task.id,
             amount: task.rewardCoins,
-            type: "credit",
+            type: "task_reward", // Changed from "credit" to "task_reward" for better categorization
             description: `Reward for completing task: ${taskTemplateTitle}`,
           },
-          { transaction: t }
+          t
         );
 
         // Update streak
@@ -1747,15 +1750,17 @@ const updateTaskStatus = asyncHandler(async (req, res, next) => {
           );
 
           if (streakCount === 7) {
-            await models.Transaction.create(
+            // Use the helper function for streak bonus too
+            await createTransactionWithBalance(
               {
                 childId: task.childId,
                 amount: 50,
                 type: "streak_bonus",
                 description: "Streak bonus for 7 consecutive days",
               },
-              { transaction: t }
+              t
             );
+            
             await streak.update({ streakCount: 0 }, { transaction: t });
             await models.Notification.create(
               {
@@ -1814,7 +1819,7 @@ const updateTaskStatus = asyncHandler(async (req, res, next) => {
                 childId: task.childId,
                 dueDate: nextDueDateTime,
                 dueTime: task.dueTime,
-                description: task.description, // Keep existing description if any
+                description: task.description,
                 recurrence: task.recurrence,
                 rewardCoins: task.rewardCoins,
                 isRecurring: true,
@@ -1884,17 +1889,19 @@ const updateTaskStatus = asyncHandler(async (req, res, next) => {
 
       await t.commit();
 
-      // For the response, use the stored values or fetch fresh data
+      // Get updated coin balance for response (optional)
+      const { coinBalance } = await getChildCoinStats(task.childId);
+
       return res.status(200).json({
         success: true,
         message: `Task ${status.toLowerCase()} successfully`,
         data: {
           id: task.id,
           title: taskTemplateTitle,
-          description: task.description, // From Task model
+          description: task.description,
           image: task.TaskTemplate?.image,
           rewardCoins: task.rewardCoins,
-          status: status, // Use the new status instead of task.status
+          status: status,
           dueDate: task.dueDate,
           dueTime: task.dueTime,
           recurrence: task.recurrence,
@@ -1903,6 +1910,8 @@ const updateTaskStatus = asyncHandler(async (req, res, next) => {
           approvedAt: task.approvedAt,
           rejectedAt: task.rejectedAt,
           rejectionReason: task.rejectionReason,
+          // Include updated coin balance in response
+          childCoinBalance: coinBalance
         },
       });
     } catch (error) {

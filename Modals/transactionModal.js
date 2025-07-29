@@ -26,6 +26,19 @@ module.exports = (sequelize, DataTypes) => {
       description: {
         type: DataTypes.STRING,
         allowNull: true,
+      },
+      // New fields for tracking earnings and balance
+      totalEarned: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+        comment: "Cumulative total of all coins earned by the child (never decreases)"
+      },
+      coinBalance: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+        comment: "Current coin balance after all transactions (can increase/decrease)"
       }
     },
     {
