@@ -1465,7 +1465,11 @@ const updateChildProfile = asyncHandler(async (req, res, next) => {
 
     // Boolean fields
     if (updateData.hasBlogAccess !== undefined) {
-      if (typeof updateData.hasBlogAccess !== "boolean") {
+      if (updateData.hasBlogAccess === 'true') {
+        updateData.hasBlogAccess = true;
+      } else if (updateData.hasBlogAccess === 'false') {
+        updateData.hasBlogAccess = false;
+      } else if (typeof updateData.hasBlogAccess !== "boolean") {
         await transaction.rollback();
         return next(new ErrorHandler("hasBlogAccess must be a boolean", 400));
       }

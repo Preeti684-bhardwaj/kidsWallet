@@ -273,9 +273,11 @@ exports.authenticateUnifiedToken = asyncHandler(async (req, res, next) => {
       req.userType = 'child';
       
     } else if (decoded.obj && decoded.obj.type === 'parent') {
+      console.log('hi i am here');
+      console.log(decoded.obj.id);
       // Find parent in database to get full details
       const parent = await models.Parent.findOne({
-        where: { id: decoded.obj.id },
+        where: { id: decoded?.obj?.id },
         attributes: { exclude: ["password", "otp", "otpExpire"] },
       });
 

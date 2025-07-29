@@ -11,11 +11,11 @@ const buildAuthConditions = async (req, childId = null) => {
         }
         console.log("Parent authenticated, checking child access for childId:", childId);
         
-        console.log("Parent ID:", req.parent.obj.id);
+        console.log("Parent ID:", req.parent?.id);
         
         // Verify parent has access to this child
         const child = await models.Child.findOne({
-          where: { id: childId, parentId: req.parent.obj.id },
+          where: { id: childId, parentId: req.parent?.id },
         });
         console.log("Child found:", child);
         
@@ -31,7 +31,7 @@ const buildAuthConditions = async (req, childId = null) => {
        else {
         // Get all children of the parent
         const children = await models.Child.findAll({
-          where: { parentId: req.parent.obj.id },
+          where: { parentId: req.parent?.id },
           attributes: ["id"],
         });
         console.log("Parent authenticated, retrieving all children for parent:", req.parent.id);
@@ -43,7 +43,7 @@ const buildAuthConditions = async (req, childId = null) => {
       if (childId && childId !== req.child.id) {
         throw new ErrorHandler("Unauthorized to view goals for other children", 403);
       }
-      return { childId: req.child.obj.id };
+      return { childId: req.child?.id };
     }
     throw new ErrorHandler("Invalid user type", 400);
   };

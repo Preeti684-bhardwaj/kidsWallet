@@ -306,6 +306,7 @@ const getAllGoals = asyncHandler(async (req, res, next) => {
       sortOrder = "DESC",
       childId,
     } = req.query;
+console.log('hii i am in function');
 
     // Validate pagination
     const pageNum = Math.max(1, parseInt(page));
