@@ -11,7 +11,7 @@ const buildAuthConditions = async (req, childId = null) => {
         }
         console.log("Parent authenticated, checking child access for childId:", childId);
         
-        console.log("Parent ID:", req.parent?.id);
+        // console.log("Parent ID:", req.parent?.id);
         
         // Verify parent has access to this child
         const child = await models.Child.findOne({
