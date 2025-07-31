@@ -49,32 +49,32 @@ const buildAuthConditions = async (req, childId = null) => {
   };
   
   // Helper function to format product data
-  const formatProducts = (products) => {
-    return products?.map((product) => {
-      const variants = product.variants || [];
-      const prices = variants.map(v => parseFloat(v.price)).filter(p => !isNaN(p));
+  // const formatProducts = (products) => {
+  //   return products?.map((product) => {
+  //     const variants = product.variants || [];
+  //     const prices = variants.map(v => parseFloat(v.price)).filter(p => !isNaN(p));
       
-      return {
-        id: product.id,
-        name: product.name,
-        description: product.description || null,
-        images: product.images || null,
-        type: product.type || null,
-        price: prices.length > 0 ? Math.min(...prices) : null,
-        priceRange: prices.length > 1 ? {
-          min: Math.min(...prices),
-          max: Math.max(...prices)
-        } : null,
-        variants: variants.map(v => ({
-          id: v.id,
-          price: parseFloat(v.price),
-          compare_at_price: v.compare_at_price ? parseFloat(v.compare_at_price) : null,
-          attributes: v.attributes,
-          is_active: v.is_active
-        }))
-      };
-    }) || [];
-  };
+  //     return {
+  //       id: product.id,
+  //       name: product.name,
+  //       description: product.description || null,
+  //       images: product.images || null,
+  //       type: product.type || null,
+  //       price: prices.length > 0 ? Math.min(...prices) : null,
+  //       priceRange: prices.length > 1 ? {
+  //         min: Math.min(...prices),
+  //         max: Math.max(...prices)
+  //       } : null,
+  //       variants: variants.map(v => ({
+  //         id: v.id,
+  //         price: parseFloat(v.price),
+  //         compare_at_price: v.compare_at_price ? parseFloat(v.compare_at_price) : null,
+  //         attributes: v.attributes,
+  //         is_active: v.is_active
+  //       }))
+  //     };
+  //   }) || [];
+  // };
   
   // Helper function to format goal data
   const formatGoalData = (goal, includeDetails = false) => {
@@ -89,7 +89,7 @@ const buildAuthConditions = async (req, childId = null) => {
       status: goalData.status,
       childId: goalData.childId,
       childName: goalData.child?.name,
-      productsCount: goalData.products?.length || 0,
+      // productsCount: goalData.products?.length || 0,
       tasksCount: goalData.tasks?.length || 0,
       completedAt: goalData.completedAt,
       approvedAt: goalData.approvedAt,
@@ -97,12 +97,15 @@ const buildAuthConditions = async (req, childId = null) => {
       rejectionReason: goalData.rejectionReason,
       createdAt: goalData.createdAt,
       updatedAt: goalData.updatedAt,
+      // Include the calculated stats
+      usagePercentage: goalData.usagePercentage || 0,
+      completionRate: goalData.completionRate || 0,
     };
   
     if (includeDetails) {
       return {
         ...baseData,
-        products: formatProducts(goalData.products),
+        // products: formatProducts(goalData.products),
         tasks: goalData.tasks?.map(task => ({
           id: task.id,
           title: task.title,
@@ -119,10 +122,11 @@ const buildAuthConditions = async (req, childId = null) => {
   
     return {
       ...baseData,
-      products: formatProducts(goalData.products),
+      // products: formatProducts(goalData.products),
       tasks: goalData.tasks || []
     };
   };
+
 module.exports = {
   buildAuthConditions,
   formatGoalData

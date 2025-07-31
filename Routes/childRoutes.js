@@ -21,7 +21,7 @@ router.get('/analytic/:childId', authenticateToken, bind(childAnalyticsControlle
 router.get('/analytic/:childId/streak', authenticateToken, bind(childAnalyticsController,'getChildStreak'));
 
 // Get children comparison for parents
-router.get('/parent/:parentId/children-comparison', authenticateToken, bind(childAnalyticsController,'getChildrenComparison'));
+// router.get('/parent/:parentId/children-comparison', authenticateToken, bind(childAnalyticsController,'getChildrenComparison'));
 
 // router.use("/", childController.router);
 

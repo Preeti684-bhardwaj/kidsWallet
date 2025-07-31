@@ -8,6 +8,8 @@ const CAMPAIGN_CONSTANTS = {
   
   // -------------file Validation------------------------------------------- 
   const validateFiles = (files) => {
+    console.log(files);
+    
     // Check if files exist
     if (!files || Object.keys(files).length === 0) {
       return "At least one file upload is required";
@@ -24,7 +26,7 @@ const CAMPAIGN_CONSTANTS = {
     // Check each file's size
     for (const file of fileArray) {
       if (file.size > CAMPAIGN_CONSTANTS.MAX_FILE_SIZE) {
-        return `File ${file.name} exceeds size limit of ${CAMPAIGN_CONSTANTS.MAX_FILE_SIZE} bytes`;
+        return `File ${file.originalname} exceeds size limit of ${CAMPAIGN_CONSTANTS.MAX_FILE_SIZE} bytes`;
       }
     }
     // If all validations pass, return true

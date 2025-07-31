@@ -136,7 +136,7 @@ class ChildAnalyticsController {
             }
           ],
           attributes: [
-            'id', 'amount', 'type', 'description', 'totalEarned', 
+            'id', 'type', 'description', 'totalEarned', 
             'coinBalance', 'createdAt'
           ],
           order: [['createdAt', 'DESC']],
@@ -145,7 +145,7 @@ class ChildAnalyticsController {
   
         return transactions.map(transaction => ({
           id: transaction.id,
-          amount: transaction.amount,
+          // amount: transaction.amount,
           type: transaction.type,
           description: transaction.description,
           totalEarned: transaction.totalEarned,
@@ -166,91 +166,91 @@ class ChildAnalyticsController {
     /**
      * Get earning statistics by type
      */
-    async getEarningsByType(childId) {
-      try {
-        const earningTypes = ['task_reward', 'streak_bonus', 'credit', 'blog_reward', 'quiz_reward'];
+    // async getEarningsByType(childId) {
+    //   try {
+    //     const earningTypes = ['task_reward', 'streak_bonus', 'credit', 'blog_reward', 'quiz_reward'];
         
-        const earnings = await models.Transaction.findAll({
-          where: {
-            childId,
-            type: {
-              [Op.in]: earningTypes
-            }
-          },
-          attributes: [
-            'type',
-            [models.db.sequelize.fn('SUM', models.db.sequelize.col('amount')), 'totalAmount'],
-            [models.db.sequelize.fn('COUNT', '*'), 'count']
-          ],
-          group: ['type'],
-          raw: true
-        });
+    //     const earnings = await models.Transaction.findAll({
+    //       where: {
+    //         childId,
+    //         type: {
+    //           [Op.in]: earningTypes
+    //         }
+    //       },
+    //       attributes: [
+    //         'type',
+    //         [models.db.sequelize.fn('SUM', models.db.sequelize.col('amount')), 'totalAmount'],
+    //         [models.db.sequelize.fn('COUNT', '*'), 'count']
+    //       ],
+    //       group: ['type'],
+    //       raw: true
+    //     });
   
-        const earningsBreakdown = {
-          task_reward: { amount: 0, count: 0 },
-          streak_bonus: { amount: 0, count: 0 },
-          credit: { amount: 0, count: 0 },
-          blog_reward: { amount: 0, count: 0 },
-          quiz_reward: { amount: 0, count: 0 }
-        };
+    //     const earningsBreakdown = {
+    //       task_reward: { amount: 0, count: 0 },
+    //       streak_bonus: { amount: 0, count: 0 },
+    //       credit: { amount: 0, count: 0 },
+    //       blog_reward: { amount: 0, count: 0 },
+    //       quiz_reward: { amount: 0, count: 0 }
+    //     };
   
-        earnings.forEach(earning => {
-          earningsBreakdown[earning.type] = {
-            amount: parseInt(earning.totalAmount),
-            count: parseInt(earning.count)
-          };
-        });
+    //     earnings.forEach(earning => {
+    //       earningsBreakdown[earning.type] = {
+    //         amount: parseInt(earning.totalAmount),
+    //         count: parseInt(earning.count)
+    //       };
+    //     });
   
-        return earningsBreakdown;
+    //     return earningsBreakdown;
   
-      } catch (error) {
-        console.error('Error in getEarningsByType:', error);
-        throw error;
-      }
-    }
+    //   } catch (error) {
+    //     console.error('Error in getEarningsByType:', error);
+    //     throw error;
+    //   }
+    // }
   
     /**
      * Get spending statistics by type
      */
-    async getSpendingByType(childId) {
-      try {
-        const spendingTypes = ['spending', 'investment'];
+    // async getSpendingByType(childId) {
+    //   try {
+    //     const spendingTypes = ['spending', 'investment'];
         
-        const spending = await models.Transaction.findAll({
-          where: {
-            childId,
-            type: {
-              [Op.in]: spendingTypes
-            }
-          },
-          attributes: [
-            'type',
-            [models.db.sequelize.fn('SUM', models.db.sequelize.col('amount')), 'totalAmount'],
-            [models.db.sequelize.fn('COUNT', '*'), 'count']
-          ],
-          group: ['type'],
-          raw: true
-        });
+    //     const spending = await models.Transaction.findAll({
+    //       where: {
+    //         childId,
+    //         type: {
+    //           [Op.in]: spendingTypes
+    //         }
+    //       },
+    //       attributes: [
+    //         'type',
+    //         [models.db.sequelize.fn('SUM', models.db.sequelize.col('amount')), 'totalAmount'],
+    //         [models.db.sequelize.fn('COUNT', '*'), 'count']
+    //       ],
+    //       group: ['type'],
+    //       raw: true
+    //     });
   
-        const spendingBreakdown = {
-          spending: { amount: 0, count: 0 },
-          investment: { amount: 0, count: 0 }
-        };
+    //     const spendingBreakdown = {
+    //       spending: { amount: 0, count: 0 },
+    //       investment: { amount: 0, count: 0 }
+    //     };
   
-        spending.forEach(spend => {
-          spendingBreakdown[spend.type] = {
-            amount: Math.abs(parseInt(spend.totalAmount)), // Make positive for display
-            count: parseInt(spend.count)
-          };
-        });
+    //     spending.forEach(spend => {
+    //       spendingBreakdown[spend.type] = {
+    //         amount: Math.abs(parseInt(spend.totalAmount)), // Make positive for display
+    //         count: parseInt(spend.count)
+    //       };
+    //     });
   
-        return spendingBreakdown;
+    //     return spendingBreakdown;
   
-      } catch (error) {
-        console.error('Error in getSpendingByType:', error);
-        throw error;
-      }
-    }
+    //   } catch (error) {
+    //     console.error('Error in getSpendingByType:', error);
+    //     throw error;
+    //   }
+    // }
     
   /**
    * Get chore completion and rejection percentages
@@ -659,86 +659,86 @@ class ChildAnalyticsController {
   /**
    * Get comparative analytics between children (for parents)
    */
-  async getChildrenComparison(req, res) {
-    try {
-      const { parentId } = req.params;
+  // async getChildrenComparison(req, res) {
+  //   try {
+  //     const { parentId } = req.params;
 
-      if (!parentId) {
-        return res.status(400).json({
-          success: false,
-          message: 'Parent ID is required'
-        });
-      }
+  //     if (!parentId) {
+  //       return res.status(400).json({
+  //         success: false,
+  //         message: 'Parent ID is required'
+  //       });
+  //     }
 
-      const children = await models.Child.findAll({
-        where: { parentId },
-        include: [
-          {
-            model: models.Task,
-            attributes: ['status']
-          },
-          {
-            model: models.Goal,
-            attributes: ['status']
-          },
-          {
-            model: models.Streak,
-            attributes: ['currentStreak', 'lastCompletedDate']
-          }
-        ]
-      });
+  //     const children = await models.Child.findAll({
+  //       where: { parentId },
+  //       include: [
+  //         {
+  //           model: models.Task,
+  //           attributes: ['status']
+  //         },
+  //         {
+  //           model: models.Goal,
+  //           attributes: ['status']
+  //         },
+  //         {
+  //           model: models.Streak,
+  //           attributes: ['currentStreak', 'lastCompletedDate']
+  //         }
+  //       ]
+  //     });
 
-      if (children.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'No children found for this parent'
-        });
-      }
+  //     if (children.length === 0) {
+  //       return res.status(404).json({
+  //         success: false,
+  //         message: 'No children found for this parent'
+  //       });
+  //     }
 
-      const comparison = await Promise.all(
-        children.map(async (child) => {
-          const choreStats = await this.getChorePercentages(child.id);
-          const goalStats = await this.getGoalPercentages(child.id);
+  //     const comparison = await Promise.all(
+  //       children.map(async (child) => {
+  //         const choreStats = await this.getChorePercentages(child.id);
+  //         const goalStats = await this.getGoalPercentages(child.id);
 
-          return {
-            id: child.id,
-            name: child.name,
-            age: child.age,
-            coinBalance: child.coinBalance,
-            choreStats,
-            goalStats,
-            currentStreak: child.Streak?.currentStreak || 0,
-            lastActiveDate: child.Streak?.lastCompletedDate
-          };
-        })
-      );
+  //         return {
+  //           id: child.id,
+  //           name: child.name,
+  //           age: child.age,
+  //           coinBalance: child.coinBalance,
+  //           choreStats,
+  //           goalStats,
+  //           currentStreak: child.Streak?.currentStreak || 0,
+  //           lastActiveDate: child.Streak?.lastCompletedDate
+  //         };
+  //       })
+  //     );
 
-      return res.status(200).json({
-        success: true,
-        data: {
-          parentId,
-          children: comparison,
-          summary: {
-            totalChildren: children.length,
-            averageCompletionRate: parseFloat(
-              (comparison.reduce((sum, child) => sum + child.choreStats.completed, 0) / children.length).toFixed(2)
-            ),
-            topPerformer: comparison.reduce((top, child) => 
-              child.choreStats.completed > (top?.choreStats?.completed || 0) ? child : top
-            , null)
-          }
-        }
-      });
+  //     return res.status(200).json({
+  //       success: true,
+  //       data: {
+  //         parentId,
+  //         children: comparison,
+  //         summary: {
+  //           totalChildren: children.length,
+  //           averageCompletionRate: parseFloat(
+  //             (comparison.reduce((sum, child) => sum + child.choreStats.completed, 0) / children.length).toFixed(2)
+  //           ),
+  //           topPerformer: comparison.reduce((top, child) => 
+  //             child.choreStats.completed > (top?.choreStats?.completed || 0) ? child : top
+  //           , null)
+  //         }
+  //       }
+  //     });
 
-    } catch (error) {
-      console.error('Error in getChildrenComparison:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
-    }
-  }
+  //   } catch (error) {
+  //     console.error('Error in getChildrenComparison:', error);
+  //     return res.status(500).json({
+  //       success: false,
+  //       message: 'Internal server error',
+  //       error: process.env.NODE_ENV === 'development' ? error.message : undefined
+  //     });
+  //   }
+  // }
 }
 
 module.exports = new ChildAnalyticsController();

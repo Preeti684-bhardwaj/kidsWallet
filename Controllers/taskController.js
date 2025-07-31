@@ -270,7 +270,7 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
       ? sortOrder.toUpperCase()
       : "DESC";
 
-    // Execute query with pagination
+    // Execute query with pagination - Fixed the include structure
     const { count, rows: taskTemplates } =
       await models.TaskTemplate.findAndCountAll({
         where: whereCondition,
@@ -289,7 +289,7 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
         include: [
           {
             model: models.Parent,
-            attributes: ["id", "email"],
+            attributes: ["id", "email", "name"],
             required: false,
           },
           {
@@ -297,17 +297,38 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
             attributes: ["id", "email"],
             required: false,
           },
+          {
+            model: models.Task,
+            attributes: ["id", "status", "rewardCoins"],
+            required: false,
+          }
         ],
       });
 
-    // Calculate pagination metadata
-    const totalPages = Math.ceil(count / limitNum);
-    const hasNextPage = pageNum < totalPages;
-    const hasPrevPage = pageNum > 1;
+    // Calculate total tasks across all templates for usage percentage
+    const totalTasksAcrossAllTemplates = taskTemplates.reduce((sum, template) => {
+      return sum + (template.Tasks ? template.Tasks.length : 0);
+    }, 0);
 
-    // Add createdBy field for better understanding
-    const templatesWithCreator = taskTemplates.map((template) => {
+    // Calculate usage statistics for each template
+    const templatesWithStats = taskTemplates.map((template) => {
       const templateData = template.toJSON();
+      
+      // Calculate usage statistics
+      const tasks = templateData.Tasks || [];
+      const totalTasks = tasks.length;
+      const completedTasks = tasks.filter(task => 
+        task.status === 'COMPLETED' || task.status === 'APPROVED'
+      ).length;
+      const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+      const totalRewardCoins = tasks.reduce((sum, task) => sum + (task.rewardCoins || 0), 0);
+      
+      // Calculate usage percentage relative to all templates
+      const usagePercentage = totalTasksAcrossAllTemplates > 0 
+        ? Math.round((totalTasks / totalTasksAcrossAllTemplates) * 100) 
+        : 0;
+      
+      // Add creator information
       templateData.createdBy = templateData.userId ? "parent" : "admin";
       templateData.creatorName = templateData.userId
         ? `${templateData.Parent?.firstName || ""} ${
@@ -316,13 +337,38 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
         : `${templateData.Admin?.firstName || ""} ${
             templateData.Admin?.lastName || ""
           }`.trim() || templateData.Admin?.email;
+      
+      // Add usage statistics
+      templateData.usageStats = {
+        totalUsage: totalTasks, // How many times this template was used to create tasks
+        usagePercentage: usagePercentage, // Percentage of usage relative to all templates
+        completedTasks: completedTasks, // Both COMPLETED and APPROVED tasks
+        completionRate: completionRate, // Percentage of tasks completed (COMPLETED + APPROVED) from this template
+        totalRewardCoins: totalRewardCoins, // Total coins from all tasks created from this template
+        pendingTasks: tasks.filter(task => task.status === 'PENDING').length,
+        approvedTasks: tasks.filter(task => task.status === 'APPROVED').length,
+        rejectedTasks: tasks.filter(task => task.status === 'REJECTED').length,
+        upcomingTasks: tasks.filter(task => task.status === 'UPCOMING').length,
+        overdueTasks: tasks.filter(task => task.status === 'OVERDUE').length,
+        // Separate counts for clarity
+        justCompletedTasks: tasks.filter(task => task.status === 'COMPLETED').length,
+      };
+      
+      // Remove the Tasks array as we've processed it into stats
+      delete templateData.Tasks;
+      
       return templateData;
     });
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(count / limitNum);
+    const hasNextPage = pageNum < totalPages;
+    const hasPrevPage = pageNum > 1;
 
     return res.status(200).json({
       success: true,
       message: "Task templates fetched successfully",
-      data: templatesWithCreator,
+      data: templatesWithStats,
       pagination: {
         currentPage: pageNum,
         totalPages,
@@ -349,7 +395,6 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
     );
   }
 });
-
 //-------------------- Get tasks by task template ID-----------------------------------------
 const getTasksByTemplateId = asyncHandler(async (req, res, next) => {
   try {

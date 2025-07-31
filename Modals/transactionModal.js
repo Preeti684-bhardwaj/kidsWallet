@@ -7,10 +7,10 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: DataTypes.UUIDV4,
         primaryKey: true,
       },
-      amount: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-      },
+      // amount: {
+      //   type: DataTypes.INTEGER,
+      //   allowNull: false,
+      // },
       type: {
         type: DataTypes.ENUM(
           "task_reward",
