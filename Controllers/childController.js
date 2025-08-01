@@ -3,7 +3,9 @@ const models = require("../Modals/index");
 const { Op, literal } = require("sequelize");
 const { generateToken } = require("../Utils/parentHelper");
 const ErrorHandler = require("../Utils/errorHandle");
+const moment = require("moment");
 const asyncHandler = require("../Utils/asyncHandler");
+const {getChildCoinStats}=require('../Utils/transactionHelper')
 
 // --------child login----------------------------------------
 const childLogin = asyncHandler(async (req, res, next) => {
@@ -287,10 +289,334 @@ const getChildNotifications = asyncHandler(async (req, res, next) => {
   }
 });
 
+
+const myWallet = asyncHandler(async (req, res, next) => {
+  try {
+    const { childId } = req.params;
+    const { 
+      startDate, 
+      endDate, 
+      limit = 30,
+      page = 1,
+      transactionType // Optional filter: 'earning', 'spending', or 'all'
+    } = req.query;
+
+    // Validate required parameters
+    if (!childId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Child ID is required'
+      });
+    }
+
+    // Check if child exists
+    const child = await models.Child.findByPk(childId);
+    if (!child) {
+      return next(
+        new ErrorHandler('Child not found',404));
+    }
+
+    // Build date range filter
+    let dateFilter = {};
+    if (startDate && endDate) {
+      dateFilter = {
+        createdAt: {
+          [Op.between]: [
+            moment(startDate).startOf('day').toDate(),
+            moment(endDate).endOf('day').toDate()
+          ]
+        }
+      };
+    } else if (startDate) {
+      dateFilter = {
+        createdAt: {
+          [Op.gte]: moment(startDate).startOf('day').toDate()
+        }
+      };
+    } else if (endDate) {
+      dateFilter = {
+        createdAt: {
+          [Op.lte]: moment(endDate).endOf('day').toDate()
+        }
+      };
+    } else {
+      // Default to last 30 days if no date range provided
+      dateFilter = {
+        createdAt: {
+          [Op.gte]: moment().subtract(30, 'days').startOf('day').toDate()
+        }
+      };
+    }
+
+    // Build transaction type filter
+    let typeFilter = {};
+    if (transactionType === 'earning') {
+      typeFilter = {
+        type: {
+          [Op.in]: ['task_reward', 'streak_bonus', 'credit', 'blog_reward', 'quiz_reward']
+        }
+      };
+    } else if (transactionType === 'spending') {
+      typeFilter = {
+        type: {
+          [Op.in]: ['spending', 'investment']
+        }
+      };
+    }
+
+    // Fetch transactions with filters
+    const transactions = await models.Transaction.findAll({
+      where: {
+        childId,
+        ...dateFilter,
+        ...typeFilter
+      },
+      include: [
+        {
+          model: models.Task,
+          required: false,
+          include: [
+            {
+              model: models.TaskTemplate,
+              required: false,
+              attributes: ['title', 'image']
+            }
+          ]
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit),
+      offset: (parseInt(page) - 1) * parseInt(limit)
+    });
+
+    // Group transactions by date
+    const dayWiseData = {};
+    
+    transactions.forEach(transaction => {
+      const date = moment(transaction.createdAt).format('YYYY-MM-DD');
+      
+      if (!dayWiseData[date]) {
+        dayWiseData[date] = {
+          date,
+          totalEarned: 0,
+          totalSpent: 0,
+          netChange: 0,
+          transactions: [],
+          coinBalanceAtEndOfDay: transaction.coinBalance // Will be updated to show end of day balance
+        };
+      }
+
+      // Calculate earned vs spent amounts
+      const earningTypes = ['task_reward', 'streak_bonus', 'credit', 'blog_reward', 'quiz_reward'];
+      const spendingTypes = ['spending', 'investment'];
+      
+      let amount = 0;
+      if (earningTypes.includes(transaction.type)) {
+        // For earning types, find the amount by comparing with previous transaction
+        // or use a direct amount field if you add it to your model
+        const previousBalance = dayWiseData[date].transactions.length > 0 
+          ? dayWiseData[date].transactions[dayWiseData[date].transactions.length - 1].coinBalance 
+          : (transaction.coinBalance - (transaction.totalEarned - (dayWiseData[date].totalEarned || 0)));
+        
+        amount = transaction.coinBalance - previousBalance;
+        dayWiseData[date].totalEarned += Math.abs(amount);
+      } else if (spendingTypes.includes(transaction.type)) {
+        // For spending, calculate the difference
+        const previousBalance = dayWiseData[date].transactions.length > 0 
+          ? dayWiseData[date].transactions[dayWiseData[date].transactions.length - 1].coinBalance 
+          : transaction.coinBalance;
+        
+        amount = Math.abs(previousBalance - transaction.coinBalance);
+        dayWiseData[date].totalSpent += amount;
+      }
+
+      dayWiseData[date].transactions.push({
+        id: transaction.id,
+        type: transaction.type,
+        description: transaction.description,
+        amount: amount,
+        coinBalance: transaction.coinBalance,
+        totalEarned: transaction.totalEarned,
+        time: moment(transaction.createdAt).format('HH:mm'),
+        createdAt: transaction.createdAt,
+        task: transaction.Task ? {
+          id: transaction.Task.id,
+          title: transaction.Task.TaskTemplate?.title || 'Unknown Task',
+          image: transaction.Task.TaskTemplate?.image,
+          status: transaction.Task.status,
+          rewardCoins: transaction.Task.rewardCoins
+        } : null
+      });
+
+      dayWiseData[date].netChange = dayWiseData[date].totalEarned - dayWiseData[date].totalSpent;
+      dayWiseData[date].coinBalanceAtEndOfDay = transaction.coinBalance;
+    });
+
+    // Convert to array and sort by date descending
+    const dayWiseArray = Object.values(dayWiseData).sort((a, b) => 
+      moment(b.date).valueOf() - moment(a.date).valueOf()
+    );
+
+    // Get current coin stats
+    const currentStats = await getChildCoinStats(childId);
+
+    // Calculate pagination info
+    const totalTransactions = await models.Transaction.count({
+      where: {
+        childId,
+        ...dateFilter,
+        ...typeFilter
+      }
+    });
+
+    const totalPages = Math.ceil(totalTransactions / parseInt(limit));
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        childId,
+        currentCoinBalance: currentStats.coinBalance,
+        currentTotalEarned: currentStats.totalEarned,
+        dayWiseTransactions: dayWiseArray,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages,
+          totalTransactions,
+          hasNextPage: parseInt(page) < totalPages,
+          hasPreviousPage: parseInt(page) > 1
+        },
+        filters: {
+          startDate: startDate || null,
+          endDate: endDate || null,
+          transactionType: transactionType || 'all',
+          limit: parseInt(limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching day-wise transactions:', error);
+    return next(
+      new ErrorHandler('Internal server error',500));
+  }
+});
+
+/**
+ * Get transaction summary for a specific date
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getDateTransactionSummary = asyncHandler(async (req, res,next) => {
+  try {
+    const { childId, date } = req.params;
+
+    if (!childId || !date) {
+      return next(
+      new ErrorHandler('Child ID and date are required',400));
+    }
+
+    // Validate date format
+    if (!moment(date, 'YYYY-MM-DD', true).isValid()) {
+     return next(
+      new ErrorHandler('Invalid date format. Use YYYY-MM-DD',400));
+    }
+
+    const startOfDay = moment(date).startOf('day').toDate();
+    const endOfDay = moment(date).endOf('day').toDate();
+
+    const transactions = await models.Transaction.findAll({
+      where: {
+        childId,
+        createdAt: {
+          [Op.between]: [startOfDay, endOfDay]
+        }
+      },
+      include: [
+        {
+          model: models.Task,
+          required: false,
+          include: [
+            {
+              model: models.TaskTemplate,
+              required: false,
+              attributes: ['title', 'image']
+            }
+          ]
+        }
+      ],
+      order: [['createdAt', 'ASC']]
+    });
+
+    let totalEarned = 0;
+    let totalSpent = 0;
+    const earningTypes = ['task_reward', 'streak_bonus', 'credit', 'blog_reward', 'quiz_reward'];
+    const spendingTypes = ['spending', 'investment'];
+
+    const processedTransactions = transactions.map((transaction, index) => {
+      let amount = 0;
+      
+      if (earningTypes.includes(transaction.type)) {
+        const prevTransaction = index > 0 ? transactions[index - 1] : null;
+        const prevBalance = prevTransaction ? prevTransaction.coinBalance : (transaction.coinBalance - transaction.totalEarned);
+        amount = transaction.coinBalance - prevBalance;
+        totalEarned += Math.abs(amount);
+      } else if (spendingTypes.includes(transaction.type)) {
+        const prevTransaction = index > 0 ? transactions[index - 1] : null;
+        const prevBalance = prevTransaction ? prevTransaction.coinBalance : transaction.coinBalance;
+        amount = Math.abs(prevBalance - transaction.coinBalance);
+        totalSpent += amount;
+      }
+
+      return {
+        id: transaction.id,
+        type: transaction.type,
+        description: transaction.description,
+        amount: amount,
+        coinBalance: transaction.coinBalance,
+        totalEarned: transaction.totalEarned,
+        time: moment(transaction.createdAt).format('HH:mm:ss'),
+        createdAt: transaction.createdAt,
+        task: transaction.Task ? {
+          id: transaction.Task.id,
+          title: transaction.Task.TaskTemplate?.title || 'Unknown Task',
+          image: transaction.Task.TaskTemplate?.image,
+          status: transaction.Task.status,
+          rewardCoins: transaction.Task.rewardCoins
+        } : null
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        date,
+        totalEarned,
+        totalSpent,
+        netChange: totalEarned - totalSpent,
+        transactionCount: transactions.length,
+        transactions: processedTransactions,
+        coinBalanceAtStartOfDay: transactions.length > 0 
+          ? (transactions[0].coinBalance - totalEarned + totalSpent)
+          : 0,
+        coinBalanceAtEndOfDay: transactions.length > 0 
+          ? transactions[transactions.length - 1].coinBalance 
+          : 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching date transaction summary:', error);
+ return next(
+      new ErrorHandler('Internal server error',500));
+  }
+});
+
 module.exports = {
   childLogin,
   getChildTasks,
   getChildNotifications,
+  myWallet,
+  getDateTransactionSummary
 };
 
 // // -----------EXTRA FUNCTIONS FOR NOTIFICATIONS-----------------------------------

@@ -3,7 +3,9 @@ const router = express.Router();
 const {
     childLogin,
     getChildTasks,
-    getChildNotifications
+    getChildNotifications,
+    myWallet,
+    getDateTransactionSummary
 } = require("../Controllers/childController");
 const { authenticateChildToken,authenticateToken } = require("../Middlewares/auth");
 const childAnalyticsController = require("../Controllers/childAnalyticsController");
@@ -19,6 +21,9 @@ router.get('/analytic/:childId', authenticateToken, bind(childAnalyticsControlle
 
 // Get child streak information
 router.get('/analytic/:childId/streak', authenticateToken, bind(childAnalyticsController,'getChildStreak'));
+router.get('/wallet/:childId/daywise', authenticateChildToken,myWallet);
+router.get('/wallet/:childId/date/:date', authenticateChildToken,getDateTransactionSummary);
+
 
 // Get children comparison for parents
 // router.get('/parent/:parentId/children-comparison', authenticateToken, bind(childAnalyticsController,'getChildrenComparison'));

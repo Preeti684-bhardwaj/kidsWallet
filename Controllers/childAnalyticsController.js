@@ -162,95 +162,7 @@ class ChildAnalyticsController {
         throw error;
       }
     }
-  
-    /**
-     * Get earning statistics by type
-     */
-    // async getEarningsByType(childId) {
-    //   try {
-    //     const earningTypes = ['task_reward', 'streak_bonus', 'credit', 'blog_reward', 'quiz_reward'];
-        
-    //     const earnings = await models.Transaction.findAll({
-    //       where: {
-    //         childId,
-    //         type: {
-    //           [Op.in]: earningTypes
-    //         }
-    //       },
-    //       attributes: [
-    //         'type',
-    //         [models.db.sequelize.fn('SUM', models.db.sequelize.col('amount')), 'totalAmount'],
-    //         [models.db.sequelize.fn('COUNT', '*'), 'count']
-    //       ],
-    //       group: ['type'],
-    //       raw: true
-    //     });
-  
-    //     const earningsBreakdown = {
-    //       task_reward: { amount: 0, count: 0 },
-    //       streak_bonus: { amount: 0, count: 0 },
-    //       credit: { amount: 0, count: 0 },
-    //       blog_reward: { amount: 0, count: 0 },
-    //       quiz_reward: { amount: 0, count: 0 }
-    //     };
-  
-    //     earnings.forEach(earning => {
-    //       earningsBreakdown[earning.type] = {
-    //         amount: parseInt(earning.totalAmount),
-    //         count: parseInt(earning.count)
-    //       };
-    //     });
-  
-    //     return earningsBreakdown;
-  
-    //   } catch (error) {
-    //     console.error('Error in getEarningsByType:', error);
-    //     throw error;
-    //   }
-    // }
-  
-    /**
-     * Get spending statistics by type
-     */
-    // async getSpendingByType(childId) {
-    //   try {
-    //     const spendingTypes = ['spending', 'investment'];
-        
-    //     const spending = await models.Transaction.findAll({
-    //       where: {
-    //         childId,
-    //         type: {
-    //           [Op.in]: spendingTypes
-    //         }
-    //       },
-    //       attributes: [
-    //         'type',
-    //         [models.db.sequelize.fn('SUM', models.db.sequelize.col('amount')), 'totalAmount'],
-    //         [models.db.sequelize.fn('COUNT', '*'), 'count']
-    //       ],
-    //       group: ['type'],
-    //       raw: true
-    //     });
-  
-    //     const spendingBreakdown = {
-    //       spending: { amount: 0, count: 0 },
-    //       investment: { amount: 0, count: 0 }
-    //     };
-  
-    //     spending.forEach(spend => {
-    //       spendingBreakdown[spend.type] = {
-    //         amount: Math.abs(parseInt(spend.totalAmount)), // Make positive for display
-    //         count: parseInt(spend.count)
-    //       };
-    //     });
-  
-    //     return spendingBreakdown;
-  
-    //   } catch (error) {
-    //     console.error('Error in getSpendingByType:', error);
-    //     throw error;
-    //   }
-    // }
+
     
   /**
    * Get chore completion and rejection percentages
@@ -655,6 +567,99 @@ class ChildAnalyticsController {
       });
     }
   }
+}
+
+module.exports = new ChildAnalyticsController();
+
+    /**
+     * Get earning statistics by type
+     */
+    // async getEarningsByType(childId) {
+    //   try {
+    //     const earningTypes = ['task_reward', 'streak_bonus', 'credit', 'blog_reward', 'quiz_reward'];
+        
+    //     const earnings = await models.Transaction.findAll({
+    //       where: {
+    //         childId,
+    //         type: {
+    //           [Op.in]: earningTypes
+    //         }
+    //       },
+    //       attributes: [
+    //         'type',
+    //         [models.db.sequelize.fn('SUM', models.db.sequelize.col('amount')), 'totalAmount'],
+    //         [models.db.sequelize.fn('COUNT', '*'), 'count']
+    //       ],
+    //       group: ['type'],
+    //       raw: true
+    //     });
+  
+    //     const earningsBreakdown = {
+    //       task_reward: { amount: 0, count: 0 },
+    //       streak_bonus: { amount: 0, count: 0 },
+    //       credit: { amount: 0, count: 0 },
+    //       blog_reward: { amount: 0, count: 0 },
+    //       quiz_reward: { amount: 0, count: 0 }
+    //     };
+  
+    //     earnings.forEach(earning => {
+    //       earningsBreakdown[earning.type] = {
+    //         amount: parseInt(earning.totalAmount),
+    //         count: parseInt(earning.count)
+    //       };
+    //     });
+  
+    //     return earningsBreakdown;
+  
+    //   } catch (error) {
+    //     console.error('Error in getEarningsByType:', error);
+    //     throw error;
+    //   }
+    // }
+  
+    /**
+     * Get spending statistics by type
+     */
+    // async getSpendingByType(childId) {
+    //   try {
+    //     const spendingTypes = ['spending', 'investment'];
+        
+    //     const spending = await models.Transaction.findAll({
+    //       where: {
+    //         childId,
+    //         type: {
+    //           [Op.in]: spendingTypes
+    //         }
+    //       },
+    //       attributes: [
+    //         'type',
+    //         [models.db.sequelize.fn('SUM', models.db.sequelize.col('amount')), 'totalAmount'],
+    //         [models.db.sequelize.fn('COUNT', '*'), 'count']
+    //       ],
+    //       group: ['type'],
+    //       raw: true
+    //     });
+  
+    //     const spendingBreakdown = {
+    //       spending: { amount: 0, count: 0 },
+    //       investment: { amount: 0, count: 0 }
+    //     };
+  
+    //     spending.forEach(spend => {
+    //       spendingBreakdown[spend.type] = {
+    //         amount: Math.abs(parseInt(spend.totalAmount)), // Make positive for display
+    //         count: parseInt(spend.count)
+    //       };
+    //     });
+  
+    //     return spendingBreakdown;
+  
+    //   } catch (error) {
+    //     console.error('Error in getSpendingByType:', error);
+    //     throw error;
+    //   }
+    // }
+
 
   /**
    * Get comparative analytics between children (for parents)
@@ -739,53 +744,50 @@ class ChildAnalyticsController {
   //     });
   //   }
   // }
-}
-
-module.exports = new ChildAnalyticsController();
 
 // Additional utility functions for advanced analytics
 
 /**
  * Get productivity insights
  */
-const getProductivityInsights = async (childId) => {
-  try {
-    const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+// const getProductivityInsights = async (childId) => {
+//   try {
+//     const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     
-    const completedTasks = await models.Task.findAll({
-      where: {
-        childId,
-        status: 'COMPLETED',
-        completedAt: {
-          [Op.gte]: last30Days
-        }
-      },
-      attributes: [
-        [models.db.sequelize.fn('DATE', models.db.sequelize.col('completedAt')), 'date'],
-        [models.db.sequelize.fn('COUNT', '*'), 'count'],
-        [models.db.sequelize.fn('AVG', models.db.sequelize.col('rewardCoins')), 'avgCoins']
-      ],
-      group: [models.db.sequelize.fn('DATE', models.db.sequelize.col('completedAt'))],
-      raw: true
-    });
+//     const completedTasks = await models.Task.findAll({
+//       where: {
+//         childId,
+//         status: 'COMPLETED',
+//         completedAt: {
+//           [Op.gte]: last30Days
+//         }
+//       },
+//       attributes: [
+//         [models.db.sequelize.fn('DATE', models.db.sequelize.col('completedAt')), 'date'],
+//         [models.db.sequelize.fn('COUNT', '*'), 'count'],
+//         [models.db.sequelize.fn('AVG', models.db.sequelize.col('rewardCoins')), 'avgCoins']
+//       ],
+//       group: [models.db.sequelize.fn('DATE', models.db.sequelize.col('completedAt'))],
+//       raw: true
+//     });
 
-    const insights = {
-      averageTasksPerDay: completedTasks.length > 0 ? 
-        parseFloat((completedTasks.reduce((sum, day) => sum + parseInt(day.count), 0) / completedTasks.length).toFixed(2)) : 0,
-      averageCoinsPerTask: completedTasks.length > 0 ?
-        parseFloat((completedTasks.reduce((sum, day) => sum + parseFloat(day.avgCoins), 0) / completedTasks.length).toFixed(2)) : 0,
-      mostProductiveDay: completedTasks.reduce((best, day) => 
-        parseInt(day.count) > parseInt(best?.count || 0) ? day : best
-      , null),
-      consistency: completedTasks.length / 30 // What percentage of days had at least one completed task
-    };
+//     const insights = {
+//       averageTasksPerDay: completedTasks.length > 0 ? 
+//         parseFloat((completedTasks.reduce((sum, day) => sum + parseInt(day.count), 0) / completedTasks.length).toFixed(2)) : 0,
+//       averageCoinsPerTask: completedTasks.length > 0 ?
+//         parseFloat((completedTasks.reduce((sum, day) => sum + parseFloat(day.avgCoins), 0) / completedTasks.length).toFixed(2)) : 0,
+//       mostProductiveDay: completedTasks.reduce((best, day) => 
+//         parseInt(day.count) > parseInt(best?.count || 0) ? day : best
+//       , null),
+//       consistency: completedTasks.length / 30 // What percentage of days had at least one completed task
+//     };
 
-    return insights;
-  } catch (error) {
-    console.error('Error in getProductivityInsights:', error);
-    throw error;
-  }
-};
+//     return insights;
+//   } catch (error) {
+//     console.error('Error in getProductivityInsights:', error);
+//     throw error;
+//   }
+// };
 
 /**
  * Route definitions
