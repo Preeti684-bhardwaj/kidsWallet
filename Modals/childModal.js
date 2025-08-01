@@ -26,6 +26,7 @@ const Child = sequelize.define('Child', {
         max: 16
       }
     },
+    
     gender :{
       type: DataTypes.ENUM('male','female','boy','girl','other'),
       allowNull: true
