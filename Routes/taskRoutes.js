@@ -27,7 +27,7 @@ router.get("/get_all_task_template",authenticateToken,getAllTaskTemplate);
 router.get("/by-template/:taskTemplateId", authenticateUnifiedToken, getTasksByTemplateId);
 router.get("/get_detail/:childId/template/:taskTemplateId",authenticateToken,getTaskTemplateWithRecurringDates);
 router.post("/create", authenticateToken, createTask);
-router.put("/status/:taskId",authenticateUnifiedToken,updateTaskStatus);
+router.put("/status/:taskId",authenticateUnifiedToken,upload.single('completionImage'),updateTaskStatus);
 router.put(
   "/update_template/:taskTemplateId", 
   authenticateToken, 

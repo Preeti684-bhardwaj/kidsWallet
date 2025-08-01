@@ -12,6 +12,7 @@ const {getChildCoinStats}=require('../Utils/transactionHelper')
 const {
   isValidLength,
 } = require("../Validators/parentValidation");
+const { createTransactionWithBalance } = require('../Utils/transactionHelper');
 const { v4: uuidv4, validate: isValidUUID } = require("uuid");
 const { uploadFile, deleteFile } = require("../Utils/cdnImplementation");
 const ErrorHandler = require("../Utils/errorHandle");
@@ -1649,13 +1650,10 @@ const updateTaskTemplateAndTasks = asyncHandler(async (req, res, next) => {
     );
   }
 });
-
-//----------------Mark task as completed (Child only)-------------------------
+// --------------------Mark task as completed (both)---------------------------
 const updateTaskStatus = asyncHandler(async (req, res, next) => {
   const { taskId } = req.params;
   const { status, reason } = req.body;
-  // Import the transaction helper at the top of your file
-  const { createTransactionWithBalance } = require('../Utils/transactionHelper');
   
   console.log(req.child);
 
@@ -1735,23 +1733,52 @@ const updateTaskStatus = asyncHandler(async (req, res, next) => {
           return next(new ErrorHandler(`Task is already ${task.status}`, 400));
         }
 
-        await task.update(
-          { status: "COMPLETED", completedAt: new Date() },
-          { transaction: t }
-        );
+        // Handle image upload if file is provided
+        let completionImageData = null;
+        if (req.file) {
+          try {
+            const uploadResult = await uploadFile(req.file);
+            completionImageData = {
+              url: uploadResult.url,
+              filename: uploadResult.filename,
+              originalName: uploadResult.originalName,
+              size: uploadResult.size,
+              mimetype: uploadResult.mimetype,
+            };
+          } catch (uploadError) {
+            console.error("Approval image upload error:", uploadError);
+            await t.rollback();
+            return next(new ErrorHandler("Failed to upload approval image", 500));
+          }
+        }
 
-        // Notify parent
-        await models.Notification.create(
-          {
-            type: "task_completion",
-            message: `Task '${taskTemplateTitle}' marked as completed by ${childName} and waiting for approval`,
-            recipientType: "parent",
-            recipientId: task.parentId,
-            relatedItemType: "task",
-            relatedItemId: task.id,
+        await task.update(
+          { 
+            status: "COMPLETED", 
+            completedAt: new Date(),
+            completionImage: completionImageData
           },
           { transaction: t }
         );
+
+        // Notify parent with approval image included
+        const notificationData = {
+          type: "task_completion",
+          message: `Task '${taskTemplateTitle}' marked as completed by ${childName} and waiting for approval`,
+          recipientType: "parent",
+          recipientId: task.parentId,
+          relatedItemType: "task",
+          relatedItemId: task.id,
+        };
+
+        // Include approval image in notification if available
+        if (completionImageData) {
+          notificationData.metadata = {
+            completionImage: completionImageData
+          };
+        }
+
+        await models.Notification.create(notificationData, { transaction: t });
       } else if (status === "APPROVED") {
         // Parent approving task
         if (userType !== "parent") {
@@ -1961,6 +1988,7 @@ const updateTaskStatus = asyncHandler(async (req, res, next) => {
           approvedAt: task.approvedAt,
           rejectedAt: task.rejectedAt,
           rejectionReason: task.rejectionReason,
+          completionImage: task.completionImage, // Include approval image in response
           // Include updated coin balance in response
           childCoinBalance: coinBalance
         },
@@ -1976,6 +2004,332 @@ const updateTaskStatus = asyncHandler(async (req, res, next) => {
     );
   }
 });
+//----------------Mark task as completed (both only)-------------------------
+// const updateTaskStatus = asyncHandler(async (req, res, next) => {
+//   const { taskId } = req.params;
+//   const { status, reason } = req.body;
+//   // Import the transaction helper at the top of your file
+//   const { createTransactionWithBalance } = require('../Utils/transactionHelper');
+  
+//   console.log(req.child);
+
+//   const userType = req.parent?.id
+//     ? "parent"
+//     : req.child?.id
+//     ? "child"
+//     : null;
+//   const userId = req.parent?.id || req.child?.id;
+
+//   try {
+//     // Validate status
+//     const allowedStatuses = ["COMPLETED", "APPROVED", "REJECTED"];
+//     if (!allowedStatuses.includes(status)) {
+//       return next(
+//         new ErrorHandler(
+//           "Invalid status. Allowed values: COMPLETED, APPROVED, REJECTED",
+//           400
+//         )
+//       );
+//     }
+
+//     // Validate user
+//     if (!userType || !userId) {
+//       return next(new ErrorHandler("Invalid authentication token", 401));
+//     }
+
+//     // Find task
+//     const taskQuery = {
+//       where: { id: taskId },
+//       include: [
+//         {
+//           model: models.TaskTemplate,
+//           attributes: ["id", "title", "image"],
+//         },
+//         { model: models.Child, attributes: ["id", "name"] },
+//       ],
+//     };
+//     if (userType === "child") taskQuery.where.childId = userId;
+//     else taskQuery.where.parentId = userId;
+
+//     const task = await models.Task.findOne(taskQuery);
+//     if (!task) {
+//       return next(new ErrorHandler("Task not found or not accessible", 404));
+//     }
+//     console.log(task);
+
+//     // Store template and child data before any updates
+//     const taskTemplateTitle = task.TaskTemplate?.title;
+//     const childName = task.Child?.name;
+
+//     const t = await sequelize.transaction();
+//     try {
+//       // Mark related notifications as read for the current user
+//       await models.Notification.update(
+//         { isRead: true },
+//         {
+//           where: {
+//             relatedItemType: "task",
+//             relatedItemId: taskId,
+//             recipientType: userType,
+//             recipientId: userId,
+//             isRead: false,
+//           },
+//           transaction: t,
+//         }
+//       );
+
+//       if (status === "COMPLETED") {
+//         // Child marking task as completed
+//         if (userType !== "child") {
+//           return next(
+//             new ErrorHandler("Only children can mark tasks as completed", 403)
+//           );
+//         }
+//         if (task.status !== "PENDING") {
+//           return next(new ErrorHandler(`Task is already ${task.status}`, 400));
+//         }
+
+//         await task.update(
+//           { status: "COMPLETED", completedAt: new Date() },
+//           { transaction: t }
+//         );
+
+//         // Notify parent
+//         await models.Notification.create(
+//           {
+//             type: "task_completion",
+//             message: `Task '${taskTemplateTitle}' marked as completed by ${childName} and waiting for approval`,
+//             recipientType: "parent",
+//             recipientId: task.parentId,
+//             relatedItemType: "task",
+//             relatedItemId: task.id,
+//           },
+//           { transaction: t }
+//         );
+//       } else if (status === "APPROVED") {
+//         // Parent approving task
+//         if (userType !== "parent") {
+//           return next(new ErrorHandler("Only parents can approve tasks", 403));
+//         }
+//         if (task.status !== "COMPLETED") {
+//           return next(
+//             new ErrorHandler("Task must be completed to approve", 400)
+//           );
+//         }
+
+//         await task.update(
+//           { status: "APPROVED", approvedAt: new Date() },
+//           { transaction: t }
+//         );
+
+//         // Award coins using the new helper function
+//         await createTransactionWithBalance(
+//           {
+//             childId: task.childId,
+//             taskId: task.id,
+//             amount: task.rewardCoins,
+//             type: "task_reward", // Changed from "credit" to "task_reward" for better categorization
+//             description: `Reward for completing task: ${taskTemplateTitle}`,
+//           },
+//           t
+//         );
+
+//         // Update streak
+//         const streak = await models.Streak.findOne({
+//           where: { childId: task.childId },
+//           transaction: t,
+//         });
+//         const today = moment().tz("Asia/Kolkata").startOf("day");
+//         if (streak) {
+//           const lastStreakDate = streak.lastTaskDate
+//             ? moment(streak.lastTaskDate).tz("Asia/Kolkata").startOf("day")
+//             : null;
+//           const streakCount =
+//             lastStreakDate && today.diff(lastStreakDate, "days") === 1
+//               ? streak.streakCount + 1
+//               : 1;
+
+//           await streak.update(
+//             { streakCount, lastTaskDate: today.toDate() },
+//             { transaction: t }
+//           );
+
+//           if (streakCount === 7) {
+//             // Use the helper function for streak bonus too
+//             await createTransactionWithBalance(
+//               {
+//                 childId: task.childId,
+//                 amount: 50,
+//                 type: "streak_bonus",
+//                 description: "Streak bonus for 7 consecutive days",
+//               },
+//               t
+//             );
+            
+//             await streak.update({ streakCount: 0 }, { transaction: t });
+//             await models.Notification.create(
+//               {
+//                 type: "streak_bonus",
+//                 message:
+//                   "Congratulations! You earned a 50-coin bonus for a 7-day streak!",
+//                 recipientType: "child",
+//                 recipientId: task.childId,
+//                 relatedItemType: "task",
+//                 relatedItemId: task.id,
+//               },
+//               { transaction: t }
+//             );
+//           }
+//         } else {
+//           await models.Streak.create(
+//             {
+//               childId: task.childId,
+//               streakCount: 1,
+//               lastTaskDate: today.toDate(),
+//             },
+//             { transaction: t }
+//           );
+//         }
+
+//         // Create next instance for daily recurring tasks
+//         if (task.isRecurring && task.recurrence === "DAILY") {
+//           const nextDueDate = moment(task.dueDate)
+//             .tz("Asia/Kolkata")
+//             .add(1, "day")
+//             .toDate();
+//           const nextDueDateTime = moment
+//             .tz(
+//               `${nextDueDate.getFullYear()}-${
+//                 nextDueDate.getMonth() + 1
+//               }-${nextDueDate.getDate()} ${task.dueTime}:00`,
+//               "YYYY-MM-DD HH:mm:ss",
+//               "Asia/Kolkata"
+//             )
+//             .toDate();
+
+//           const existingTask = await models.Task.findOne({
+//             where: {
+//               childId: task.childId,
+//               taskTemplateId: task.taskTemplateId,
+//               dueDate: nextDueDateTime,
+//             },
+//             transaction: t,
+//           });
+
+//           if (!existingTask) {
+//             await models.Task.create(
+//               {
+//                 taskTemplateId: task.taskTemplateId,
+//                 parentId: task.parentId,
+//                 childId: task.childId,
+//                 dueDate: nextDueDateTime,
+//                 dueTime: task.dueTime,
+//                 description: task.description,
+//                 recurrence: task.recurrence,
+//                 rewardCoins: task.rewardCoins,
+//                 isRecurring: true,
+//                 status: "PENDING",
+//               },
+//               { transaction: t }
+//             );
+//           }
+//         }
+
+//         // Notify child
+//         await models.Notification.create(
+//           {
+//             type: "task_approval",
+//             message: `Your task "${taskTemplateTitle}" was approved! You earned ${task.rewardCoins} coins.`,
+//             recipientType: "child",
+//             recipientId: task.childId,
+//             relatedItemType: "task",
+//             relatedItemId: task.id,
+//           },
+//           { transaction: t }
+//         );
+//       } else if (status === "REJECTED") {
+//         // Parent rejecting task
+//         if (userType !== "parent") {
+//           return next(new ErrorHandler("Only parents can reject tasks", 403));
+//         }
+//         if (task.status !== "COMPLETED") {
+//           return next(
+//             new ErrorHandler("Task must be completed to reject", 400)
+//           );
+//         }
+
+//         await task.update(
+//           {
+//             status: "REJECTED",
+//             rejectedAt: new Date(),
+//             rejectionReason: reason,
+//           },
+//           { transaction: t }
+//         );
+
+//         // Reset streak
+//         const streak = await models.Streak.findOne({
+//           where: { childId: task.childId },
+//           transaction: t,
+//         });
+//         if (streak) {
+//           await streak.update({ streakCount: 0 }, { transaction: t });
+//         }
+
+//         // Notify child
+//         await models.Notification.create(
+//           {
+//             type: "task_rejection",
+//             message: `Your task "${taskTemplateTitle}" was rejected.${
+//               reason ? ` Reason: ${reason}` : ""
+//             }`,
+//             recipientType: "child",
+//             recipientId: task.childId,
+//             relatedItemType: "task",
+//             relatedItemId: task.id,
+//           },
+//           { transaction: t }
+//         );
+//       }
+
+//       await t.commit();
+
+//       // Get updated coin balance for response (optional)
+//       const { coinBalance } = await getChildCoinStats(task.childId);
+
+//       return res.status(200).json({
+//         success: true,
+//         message: `Task ${status.toLowerCase()} successfully`,
+//         data: {
+//           id: task.id,
+//           title: taskTemplateTitle,
+//           description: task.description,
+//           image: task.TaskTemplate?.image,
+//           rewardCoins: task.rewardCoins,
+//           status: status,
+//           dueDate: task.dueDate,
+//           dueTime: task.dueTime,
+//           recurrence: task.recurrence,
+//           isRecurring: task.isRecurring,
+//           completedAt: task.completedAt,
+//           approvedAt: task.approvedAt,
+//           rejectedAt: task.rejectedAt,
+//           rejectionReason: task.rejectionReason,
+//           // Include updated coin balance in response
+//           childCoinBalance: coinBalance
+//         },
+//       });
+//     } catch (error) {
+//       await t.rollback();
+//       throw error;
+//     }
+//   } catch (error) {
+//     console.error("Error updating task status:", error);
+//     return next(
+//       new ErrorHandler(error.message || "Failed to update task status", 500)
+//     );
+//   }
+// });
 
 //----------------Update task reward coins (Parent only)---------------------------------------
 const updateTaskReward = asyncHandler(async (req, res, next) => {

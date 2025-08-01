@@ -68,6 +68,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: true
     },
+    completionImage: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      comment: 'Image uploaded by child when marking task as completed'
+    }
   },
   {
     timestamps: true,
