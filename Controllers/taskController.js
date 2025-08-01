@@ -150,26 +150,27 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
       );
     }
 
-    // Base where condition based on user type and filters
-    let whereCondition = {};
+    // Build where conditions array
+    const whereConditions = [];
 
+    // Base condition based on user type and filters
     if (req.userType === "parent") {
       // Handle createdBy filter for parents
       if (createdBy === "parent") {
         // Parent wants only their own templates
-        whereCondition = {
+        whereConditions.push({
           userId: req.parent.id,
           adminId: null,
-        };
+        });
       } else if (createdBy === "admin") {
         // Parent wants only admin-created templates
-        whereCondition = {
+        whereConditions.push({
           adminId: { [Op.ne]: null },
           userId: null,
-        };
+        });
       } else {
         // Default for parents: get templates created by this parent OR by any admin
-        whereCondition = {
+        whereConditions.push({
           [Op.or]: [
             {
               userId: req.parent.id,
@@ -180,7 +181,7 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
               userId: null, // Templates created by any admin (default templates)
             },
           ],
-        };
+        });
       }
     } else if (req.userType === "admin") {
       // Handle createdBy filter for admins
@@ -207,10 +208,10 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
         // Validate that adminId exists and is not the same as requesting admin
         if (adminId === req.admin.id) {
           // Get templates from requesting admin
-          whereCondition = {
+          whereConditions.push({
             adminId: req.admin.id,
             userId: null,
-          };
+          });
         } else {
           return next(
             new ErrorHandler("Admins can only access their own templates", 403)
@@ -218,10 +219,10 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
         }
       } else if (createdBy === "admin" || !createdBy) {
         // Get templates created by the requesting admin only
-        whereCondition = {
+        whereConditions.push({
           adminId: req.admin.id,
           userId: null,
-        };
+        });
       } else {
         return next(
           new ErrorHandler("Invalid filter combination for admin user", 400)
@@ -251,16 +252,16 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
         );
       }
 
-      whereCondition = {
-        ...whereCondition,
-        [Op.and]: [
-          whereCondition,
-          {
-            title: { [Op.iLike]: `%${searchTerm}%` },
-          },
-        ],
-      };
+      // Add search condition
+      whereConditions.push({
+        title: { [Op.iLike]: `%${searchTerm}%` },
+      });
     }
+
+    // Combine all conditions with AND
+    const whereCondition = whereConditions.length > 1 
+      ? { [Op.and]: whereConditions }
+      : whereConditions[0] || {};
 
     // Validate sort parameters
     const validSortFields = ["createdAt", "updatedAt", "title"];
@@ -269,6 +270,10 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
     const finalSortOrder = validSortOrders.includes(sortOrder.toUpperCase())
       ? sortOrder.toUpperCase()
       : "DESC";
+
+    // Debug logging (remove in production)
+    console.log('Where condition:', JSON.stringify(whereCondition, null, 2));
+    console.log('Pagination:', { pageNum, limitNum, offset });
 
     // Execute query with pagination - Fixed the include structure
     const { count, rows: taskTemplates } =
@@ -303,6 +308,7 @@ const getAllTaskTemplate = asyncHandler(async (req, res, next) => {
             required: false,
           }
         ],
+        distinct: true, // Important for accurate counting with includes
       });
 
     // Calculate total tasks across all templates for usage percentage

@@ -1920,407 +1920,407 @@ const getGoalAnalytics = asyncHandler(async (req, res, next) => {
 });
 
 // Analytics for multiple goals (child-level or overall)
-const getGoalsAnalytics = asyncHandler(async (req, res, next) => {
-  const { childId } = req.params; // Optional: for child-specific analytics
-  const { timeline = "days", startDate, endDate, type, status } = req.query;
+// const getGoalsAnalytics = asyncHandler(async (req, res, next) => {
+//   const { childId } = req.params; // Optional: for child-specific analytics
+//   const { timeline = "days", startDate, endDate, type, status } = req.query;
 
-  try {
-    // Validate childId if provided
-    if (childId && !isValidUUID(childId)) {
-      return next(
-        new ErrorHandler("Invalid childId. Must be a valid UUID", 400)
-      );
-    }
+//   try {
+//     // Validate childId if provided
+//     if (childId && !isValidUUID(childId)) {
+//       return next(
+//         new ErrorHandler("Invalid childId. Must be a valid UUID", 400)
+//       );
+//     }
 
-    // Validate timeline parameter
-    const validTimelines = ["days", "weeks", "months"];
-    if (!validTimelines.includes(timeline)) {
-      return next(
-        new ErrorHandler(
-          "Invalid timeline. Must be 'days', 'weeks', or 'months'",
-          400
-        )
-      );
-    }
+//     // Validate timeline parameter
+//     const validTimelines = ["days", "weeks", "months"];
+//     if (!validTimelines.includes(timeline)) {
+//       return next(
+//         new ErrorHandler(
+//           "Invalid timeline. Must be 'days', 'weeks', or 'months'",
+//           400
+//         )
+//       );
+//     }
 
-    // Validate type filter if provided
-    if (type && !["TASK", "COIN"].includes(type)) {
-      return next(
-        new ErrorHandler("Invalid type. Must be 'TASK' or 'COIN'", 400)
-      );
-    }
+//     // Validate type filter if provided
+//     if (type && !["TASK", "COIN"].includes(type)) {
+//       return next(
+//         new ErrorHandler("Invalid type. Must be 'TASK' or 'COIN'", 400)
+//       );
+//     }
 
-    // Validate status filter if provided
-    if (
-      status &&
-      !["PENDING", "COMPLETED", "APPROVED", "REJECTED"].includes(status)
-    ) {
-      return next(
-        new ErrorHandler(
-          "Invalid status. Must be 'PENDING', 'COMPLETED', 'APPROVED', or 'REJECTED'",
-          400
-        )
-      );
-    }
+//     // Validate status filter if provided
+//     if (
+//       status &&
+//       !["PENDING", "COMPLETED", "APPROVED", "REJECTED"].includes(status)
+//     ) {
+//       return next(
+//         new ErrorHandler(
+//           "Invalid status. Must be 'PENDING', 'COMPLETED', 'APPROVED', or 'REJECTED'",
+//           400
+//         )
+//       );
+//     }
 
-    // Validate date range if provided
-    let dateFilter = {};
-    if (startDate || endDate) {
-      const start = startDate ? moment(startDate) : null;
-      const end = endDate ? moment(endDate) : null;
+//     // Validate date range if provided
+//     let dateFilter = {};
+//     if (startDate || endDate) {
+//       const start = startDate ? moment(startDate) : null;
+//       const end = endDate ? moment(endDate) : null;
 
-      if (start && !start.isValid()) {
-        return next(
-          new ErrorHandler("Invalid startDate format. Use YYYY-MM-DD", 400)
-        );
-      }
-      if (end && !end.isValid()) {
-        return next(
-          new ErrorHandler("Invalid endDate format. Use YYYY-MM-DD", 400)
-        );
-      }
-      if (start && end && start.isAfter(end)) {
-        return next(new ErrorHandler("startDate cannot be after endDate", 400));
-      }
+//       if (start && !start.isValid()) {
+//         return next(
+//           new ErrorHandler("Invalid startDate format. Use YYYY-MM-DD", 400)
+//         );
+//       }
+//       if (end && !end.isValid()) {
+//         return next(
+//           new ErrorHandler("Invalid endDate format. Use YYYY-MM-DD", 400)
+//         );
+//       }
+//       if (start && end && start.isAfter(end)) {
+//         return next(new ErrorHandler("startDate cannot be after endDate", 400));
+//       }
 
-      // Build date filter for completedAt
-      if (start)
-        dateFilter.completedAt = {
-          ...dateFilter.completedAt,
-          [Op.gte]: start.toDate(),
-        };
-      if (end)
-        dateFilter.completedAt = {
-          ...dateFilter.completedAt,
-          [Op.lte]: end.endOf("day").toDate(),
-        };
-    }
+//       // Build date filter for completedAt
+//       if (start)
+//         dateFilter.completedAt = {
+//           ...dateFilter.completedAt,
+//           [Op.gte]: start.toDate(),
+//         };
+//       if (end)
+//         dateFilter.completedAt = {
+//           ...dateFilter.completedAt,
+//           [Op.lte]: end.endOf("day").toDate(),
+//         };
+//     }
 
-    // Build where clause for goals
-    const goalWhereClause = {
-      ...dateFilter,
-    };
+//     // Build where clause for goals
+//     const goalWhereClause = {
+//       ...dateFilter,
+//     };
 
-    // Add filters
-    if (childId) goalWhereClause.childId = childId;
-    if (type) goalWhereClause.type = type;
-    if (status) goalWhereClause.status = status;
+//     // Add filters
+//     if (childId) goalWhereClause.childId = childId;
+//     if (type) goalWhereClause.type = type;
+//     if (status) goalWhereClause.status = status;
 
-    // Fetch goals with related data
-    const goals = await models.Goal.findAll({
-      where: goalWhereClause,
-      include: [
-        {
-          model: models.Child,
-          as: "child",
-          attributes: ["id", "name", "age"],
-        },
-        {
-          model: models.Product,
-          as: "products",
-          attributes: ["id", "name", "price"],
-          through: { attributes: [] },
-        },
-        {
-          model: models.Task,
-          as: "tasks",
-          attributes: ["id", "status", "completedAt", "rewardCoins"],
-          through: { attributes: [] },
-        },
-      ],
-    });
+//     // Fetch goals with related data
+//     const goals = await models.Goal.findAll({
+//       where: goalWhereClause,
+//       include: [
+//         {
+//           model: models.Child,
+//           as: "child",
+//           attributes: ["id", "name", "age"],
+//         },
+//         {
+//           model: models.Product,
+//           as: "products",
+//           attributes: ["id", "name", "price"],
+//           through: { attributes: [] },
+//         },
+//         {
+//           model: models.Task,
+//           as: "tasks",
+//           attributes: ["id", "status", "completedAt", "rewardCoins"],
+//           through: { attributes: [] },
+//         },
+//       ],
+//     });
 
-    if (goals.length === 0) {
-      return res.status(200).json({
-        success: true,
-        message: "No goals found matching the criteria",
-        data: {
-          completionRate: 0,
-          averageCompletionTime: null,
-          rejectionRate: 0,
-          timeline: {
-            type: timeline,
-            data: [],
-            summary: {
-              totalPeriods: 0,
-              mostActiveLabel: null,
-              mostActiveCount: 0,
-              leastActiveLabel: null,
-              leastActiveCount: 0,
-            },
-          },
-          goalBreakdown: {
-            totalGoals: 0,
-            completedGoals: 0,
-            approvedGoals: 0,
-            rejectedGoals: 0,
-            pendingGoals: 0,
-          },
-          typeAnalysis: {
-            taskGoals: 0,
-            coinGoals: 0,
-          },
-          ageGroupAnalysis: [],
-        },
-      });
-    }
+//     if (goals.length === 0) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "No goals found matching the criteria",
+//         data: {
+//           completionRate: 0,
+//           averageCompletionTime: null,
+//           rejectionRate: 0,
+//           timeline: {
+//             type: timeline,
+//             data: [],
+//             summary: {
+//               totalPeriods: 0,
+//               mostActiveLabel: null,
+//               mostActiveCount: 0,
+//               leastActiveLabel: null,
+//               leastActiveCount: 0,
+//             },
+//           },
+//           goalBreakdown: {
+//             totalGoals: 0,
+//             completedGoals: 0,
+//             approvedGoals: 0,
+//             rejectedGoals: 0,
+//             pendingGoals: 0,
+//           },
+//           typeAnalysis: {
+//             taskGoals: 0,
+//             coinGoals: 0,
+//           },
+//           ageGroupAnalysis: [],
+//         },
+//       });
+//     }
 
-    // Initialize analytics variables
-    let completedGoals = 0;
-    let rejectedGoals = 0;
-    let pendingGoals = 0;
-    let approvedGoals = 0;
-    let totalCompletionTime = 0;
-    let completionTimesCount = 0;
-    const timelineCounts = new Map();
-    const ageGroupCounts = new Map();
-    const typeCounts = { TASK: 0, COIN: 0 };
+//     // Initialize analytics variables
+//     let completedGoals = 0;
+//     let rejectedGoals = 0;
+//     let pendingGoals = 0;
+//     let approvedGoals = 0;
+//     let totalCompletionTime = 0;
+//     let completionTimesCount = 0;
+//     const timelineCounts = new Map();
+//     const ageGroupCounts = new Map();
+//     const typeCounts = { TASK: 0, COIN: 0 };
 
-    // Process each goal
-    goals.forEach((goal) => {
-      const { status, completedAt, createdAt, approvedAt, type, child } = goal;
+//     // Process each goal
+//     goals.forEach((goal) => {
+//       const { status, completedAt, createdAt, approvedAt, type, child } = goal;
 
-      // Count by status
-      switch (status) {
-        case "COMPLETED":
-          completedGoals++;
-          break;
-        case "APPROVED":
-          approvedGoals++;
-          break;
-        case "REJECTED":
-          rejectedGoals++;
-          break;
-        case "PENDING":
-          pendingGoals++;
-          break;
-      }
+//       // Count by status
+//       switch (status) {
+//         case "COMPLETED":
+//           completedGoals++;
+//           break;
+//         case "APPROVED":
+//           approvedGoals++;
+//           break;
+//         case "REJECTED":
+//           rejectedGoals++;
+//           break;
+//         case "PENDING":
+//           pendingGoals++;
+//           break;
+//       }
 
-      // Count by type
-      if (type) {
-        typeCounts[type] = (typeCounts[type] || 0) + 1;
-      }
+//       // Count by type
+//       if (type) {
+//         typeCounts[type] = (typeCounts[type] || 0) + 1;
+//       }
 
-      // Age group analysis
-      if (child && child.age !== null && child.age !== undefined) {
-        const age = parseInt(child.age);
-        if (!isNaN(age) && age >= 0) {
-          const ageGroupStart = Math.floor(age / 5) * 5;
-          const ageGroupEnd = ageGroupStart + 4;
-          const ageGroupKey = `${ageGroupStart}-${ageGroupEnd}`;
+//       // Age group analysis
+//       if (child && child.age !== null && child.age !== undefined) {
+//         const age = parseInt(child.age);
+//         if (!isNaN(age) && age >= 0) {
+//           const ageGroupStart = Math.floor(age / 5) * 5;
+//           const ageGroupEnd = ageGroupStart + 4;
+//           const ageGroupKey = `${ageGroupStart}-${ageGroupEnd}`;
 
-          const current = ageGroupCounts.get(ageGroupKey) || {
-            ageGroup: ageGroupKey,
-            minAge: ageGroupStart,
-            maxAge: ageGroupEnd,
-            count: 0,
-          };
-          current.count += 1;
-          ageGroupCounts.set(ageGroupKey, current);
-        }
-      }
+//           const current = ageGroupCounts.get(ageGroupKey) || {
+//             ageGroup: ageGroupKey,
+//             minAge: ageGroupStart,
+//             maxAge: ageGroupEnd,
+//             count: 0,
+//           };
+//           current.count += 1;
+//           ageGroupCounts.set(ageGroupKey, current);
+//         }
+//       }
 
-      // Timeline analysis for completed goals
-      if (status === "COMPLETED" || status === "APPROVED") {
-        const completionDate = completedAt || approvedAt || createdAt;
+//       // Timeline analysis for completed goals
+//       if (status === "COMPLETED" || status === "APPROVED") {
+//         const completionDate = completedAt || approvedAt || createdAt;
 
-        if (completionDate && createdAt) {
-          // Average completion time calculation
-          const completionTime = moment(completionDate).diff(
-            moment(createdAt),
-            "hours"
-          );
-          totalCompletionTime += Math.abs(completionTime);
-          completionTimesCount++;
+//         if (completionDate && createdAt) {
+//           // Average completion time calculation
+//           const completionTime = moment(completionDate).diff(
+//             moment(createdAt),
+//             "hours"
+//           );
+//           totalCompletionTime += Math.abs(completionTime);
+//           completionTimesCount++;
 
-          // Timeline analysis based on completion date
-          const dateMoment = moment(completionDate);
-          let timelineKey;
-          let timelineLabel;
+//           // Timeline analysis based on completion date
+//           const dateMoment = moment(completionDate);
+//           let timelineKey;
+//           let timelineLabel;
 
-          switch (timeline) {
-            case "days":
-              timelineKey = dateMoment.format("YYYY-MM-DD");
-              timelineLabel = dateMoment.format("dddd, MMM DD");
-              break;
-            case "weeks":
-              const weekStart = dateMoment.clone().startOf("isoWeek");
-              const weekEnd = dateMoment.clone().endOf("isoWeek");
-              timelineKey = `${dateMoment.isoWeekYear()}-W${dateMoment.isoWeek()}`;
-              timelineLabel = `Week ${dateMoment.isoWeek()}, ${dateMoment.isoWeekYear()} (${weekStart.format(
-                "MMM DD"
-              )} - ${weekEnd.format("MMM DD")})`;
-              break;
-            case "months":
-              timelineKey = dateMoment.format("YYYY-MM");
-              timelineLabel = dateMoment.format("MMMM YYYY");
-              break;
-          }
+//           switch (timeline) {
+//             case "days":
+//               timelineKey = dateMoment.format("YYYY-MM-DD");
+//               timelineLabel = dateMoment.format("dddd, MMM DD");
+//               break;
+//             case "weeks":
+//               const weekStart = dateMoment.clone().startOf("isoWeek");
+//               const weekEnd = dateMoment.clone().endOf("isoWeek");
+//               timelineKey = `${dateMoment.isoWeekYear()}-W${dateMoment.isoWeek()}`;
+//               timelineLabel = `Week ${dateMoment.isoWeek()}, ${dateMoment.isoWeekYear()} (${weekStart.format(
+//                 "MMM DD"
+//               )} - ${weekEnd.format("MMM DD")})`;
+//               break;
+//             case "months":
+//               timelineKey = dateMoment.format("YYYY-MM");
+//               timelineLabel = dateMoment.format("MMMM YYYY");
+//               break;
+//           }
 
-          if (timelineKey && timelineLabel) {
-            const current = timelineCounts.get(timelineKey) || {
-              key: timelineKey,
-              label: timelineLabel,
-              count: 0,
-              date: dateMoment.toDate(),
-            };
-            current.count += 1;
-            timelineCounts.set(timelineKey, current);
-          }
-        }
-      }
-    });
+//           if (timelineKey && timelineLabel) {
+//             const current = timelineCounts.get(timelineKey) || {
+//               key: timelineKey,
+//               label: timelineLabel,
+//               count: 0,
+//               date: dateMoment.toDate(),
+//             };
+//             current.count += 1;
+//             timelineCounts.set(timelineKey, current);
+//           }
+//         }
+//       }
+//     });
 
-    // Calculate analytics
-    const totalGoals = goals.length;
-    const completionRate =
-      totalGoals > 0
-        ? parseFloat(
-            (((completedGoals + approvedGoals) / totalGoals) * 100).toFixed(2)
-          )
-        : 0;
-    const rejectionRate =
-      totalGoals > 0
-        ? parseFloat(((rejectedGoals / totalGoals) * 100).toFixed(2))
-        : 0;
-    const averageCompletionTime =
-      completionTimesCount > 0
-        ? parseFloat((totalCompletionTime / completionTimesCount).toFixed(2))
-        : null;
+//     // Calculate analytics
+//     const totalGoals = goals.length;
+//     const completionRate =
+//       totalGoals > 0
+//         ? parseFloat(
+//             (((completedGoals + approvedGoals) / totalGoals) * 100).toFixed(2)
+//           )
+//         : 0;
+//     const rejectionRate =
+//       totalGoals > 0
+//         ? parseFloat(((rejectedGoals / totalGoals) * 100).toFixed(2))
+//         : 0;
+//     const averageCompletionTime =
+//       completionTimesCount > 0
+//         ? parseFloat((totalCompletionTime / completionTimesCount).toFixed(2))
+//         : null;
 
-    // Process timeline data
-    const timelineData = Array.from(timelineCounts.values())
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
-      .map((item) => ({
-        key: item.key,
-        label: item.label,
-        count: item.count,
-        percentage:
-          totalGoals > 0
-            ? parseFloat(((item.count / totalGoals) * 100).toFixed(2))
-            : 0,
-      }));
+//     // Process timeline data
+//     const timelineData = Array.from(timelineCounts.values())
+//       .sort((a, b) => new Date(a.date) - new Date(b.date))
+//       .map((item) => ({
+//         key: item.key,
+//         label: item.label,
+//         count: item.count,
+//         percentage:
+//           totalGoals > 0
+//             ? parseFloat(((item.count / totalGoals) * 100).toFixed(2))
+//             : 0,
+//       }));
 
-    // Timeline summary
-    const timelineSummary = {
-      totalPeriods: timelineData.length,
-      mostActiveLabel: null,
-      mostActiveCount: 0,
-      leastActiveLabel: null,
-      leastActiveCount: 0,
-    };
+//     // Timeline summary
+//     const timelineSummary = {
+//       totalPeriods: timelineData.length,
+//       mostActiveLabel: null,
+//       mostActiveCount: 0,
+//       leastActiveLabel: null,
+//       leastActiveCount: 0,
+//     };
 
-    if (timelineData.length > 0) {
-      const sortedByCount = [...timelineData].sort((a, b) => b.count - a.count);
-      timelineSummary.mostActiveLabel = sortedByCount[0].label;
-      timelineSummary.mostActiveCount = sortedByCount[0].count;
-      timelineSummary.leastActiveLabel =
-        sortedByCount[sortedByCount.length - 1].label;
-      timelineSummary.leastActiveCount =
-        sortedByCount[sortedByCount.length - 1].count;
-    }
+//     if (timelineData.length > 0) {
+//       const sortedByCount = [...timelineData].sort((a, b) => b.count - a.count);
+//       timelineSummary.mostActiveLabel = sortedByCount[0].label;
+//       timelineSummary.mostActiveCount = sortedByCount[0].count;
+//       timelineSummary.leastActiveLabel =
+//         sortedByCount[sortedByCount.length - 1].label;
+//       timelineSummary.leastActiveCount =
+//         sortedByCount[sortedByCount.length - 1].count;
+//     }
 
-    // Process age group data
-    const ageGroupAnalysis = Array.from(ageGroupCounts.values())
-      .sort((a, b) => a.minAge - b.minAge)
-      .map((item) => ({
-        ageGroup: item.ageGroup,
-        count: item.count,
-        percentage:
-          totalGoals > 0
-            ? parseFloat(((item.count / totalGoals) * 100).toFixed(2))
-            : 0,
-      }));
+//     // Process age group data
+//     const ageGroupAnalysis = Array.from(ageGroupCounts.values())
+//       .sort((a, b) => a.minAge - b.minAge)
+//       .map((item) => ({
+//         ageGroup: item.ageGroup,
+//         count: item.count,
+//         percentage:
+//           totalGoals > 0
+//             ? parseFloat(((item.count / totalGoals) * 100).toFixed(2))
+//             : 0,
+//       }));
 
-    // Return comprehensive analytics
-    return res.status(200).json({
-      success: true,
-      message: "Goals analytics fetched successfully",
-      data: {
-        // Core metrics
-        completionRate,
-        averageCompletionTime: averageCompletionTime
-          ? `${averageCompletionTime} hours`
-          : null,
-        rejectionRate,
+//     // Return comprehensive analytics
+//     return res.status(200).json({
+//       success: true,
+//       message: "Goals analytics fetched successfully",
+//       data: {
+//         // Core metrics
+//         completionRate,
+//         averageCompletionTime: averageCompletionTime
+//           ? `${averageCompletionTime} hours`
+//           : null,
+//         rejectionRate,
 
-        // Timeline data with filtering
-        timeline: {
-          type: timeline,
-          data: timelineData,
-          summary: timelineSummary,
-          dateRange: {
-            startDate: startDate || null,
-            endDate: endDate || null,
-          },
-        },
+//         // Timeline data with filtering
+//         timeline: {
+//           type: timeline,
+//           data: timelineData,
+//           summary: timelineSummary,
+//           dateRange: {
+//             startDate: startDate || null,
+//             endDate: endDate || null,
+//           },
+//         },
 
-        // Goal status breakdown
-        goalBreakdown: {
-          totalGoals,
-          completedGoals,
-          approvedGoals,
-          rejectedGoals,
-          pendingGoals,
-          statusDistribution: {
-            completed:
-              totalGoals > 0
-                ? parseFloat(((completedGoals / totalGoals) * 100).toFixed(2))
-                : 0,
-            approved:
-              totalGoals > 0
-                ? parseFloat(((approvedGoals / totalGoals) * 100).toFixed(2))
-                : 0,
-            rejected:
-              totalGoals > 0
-                ? parseFloat(((rejectedGoals / totalGoals) * 100).toFixed(2))
-                : 0,
-            pending:
-              totalGoals > 0
-                ? parseFloat(((pendingGoals / totalGoals) * 100).toFixed(2))
-                : 0,
-          },
-        },
+//         // Goal status breakdown
+//         goalBreakdown: {
+//           totalGoals,
+//           completedGoals,
+//           approvedGoals,
+//           rejectedGoals,
+//           pendingGoals,
+//           statusDistribution: {
+//             completed:
+//               totalGoals > 0
+//                 ? parseFloat(((completedGoals / totalGoals) * 100).toFixed(2))
+//                 : 0,
+//             approved:
+//               totalGoals > 0
+//                 ? parseFloat(((approvedGoals / totalGoals) * 100).toFixed(2))
+//                 : 0,
+//             rejected:
+//               totalGoals > 0
+//                 ? parseFloat(((rejectedGoals / totalGoals) * 100).toFixed(2))
+//                 : 0,
+//             pending:
+//               totalGoals > 0
+//                 ? parseFloat(((pendingGoals / totalGoals) * 100).toFixed(2))
+//                 : 0,
+//           },
+//         },
 
-        // Type analysis
-        typeAnalysis: {
-          taskGoals: typeCounts.TASK || 0,
-          coinGoals: typeCounts.COIN || 0,
-          taskGoalsPercentage:
-            totalGoals > 0
-              ? parseFloat(
-                  (((typeCounts.TASK || 0) / totalGoals) * 100).toFixed(2)
-                )
-              : 0,
-          coinGoalsPercentage:
-            totalGoals > 0
-              ? parseFloat(
-                  (((typeCounts.COIN || 0) / totalGoals) * 100).toFixed(2)
-                )
-              : 0,
-        },
+//         // Type analysis
+//         typeAnalysis: {
+//           taskGoals: typeCounts.TASK || 0,
+//           coinGoals: typeCounts.COIN || 0,
+//           taskGoalsPercentage:
+//             totalGoals > 0
+//               ? parseFloat(
+//                   (((typeCounts.TASK || 0) / totalGoals) * 100).toFixed(2)
+//                 )
+//               : 0,
+//           coinGoalsPercentage:
+//             totalGoals > 0
+//               ? parseFloat(
+//                   (((typeCounts.COIN || 0) / totalGoals) * 100).toFixed(2)
+//                 )
+//               : 0,
+//         },
 
-        // Age group analysis
-        ageGroupAnalysis,
+//         // Age group analysis
+//         ageGroupAnalysis,
 
-        // Query parameters used
-        filters: {
-          timeline,
-          startDate: startDate || null,
-          endDate: endDate || null,
-          type: type || null,
-          status: status || null,
-          childId: childId || null,
-        },
-      },
-    });
-  } catch (error) {
-    console.error("Error fetching goals analytics:", error);
-    return next(
-      new ErrorHandler(error.message || "Failed to fetch goals analytics", 500)
-    );
-  }
-});
+//         // Query parameters used
+//         filters: {
+//           timeline,
+//           startDate: startDate || null,
+//           endDate: endDate || null,
+//           type: type || null,
+//           status: status || null,
+//           childId: childId || null,
+//         },
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error fetching goals analytics:", error);
+//     return next(
+//       new ErrorHandler(error.message || "Failed to fetch goals analytics", 500)
+//     );
+//   }
+// });
 
 module.exports = {
   createGoal,
@@ -2330,5 +2330,5 @@ module.exports = {
   deleteGoal,
   getGoalAnalytics,
   // getGoalAnalytics,
-  getGoalsAnalytics,
+  // getGoalsAnalytics,
 };

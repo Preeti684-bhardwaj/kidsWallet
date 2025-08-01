@@ -47,35 +47,6 @@ const buildAuthConditions = async (req, childId = null) => {
     }
     throw new ErrorHandler("Invalid user type", 400);
   };
-  
-  // Helper function to format product data
-  // const formatProducts = (products) => {
-  //   return products?.map((product) => {
-  //     const variants = product.variants || [];
-  //     const prices = variants.map(v => parseFloat(v.price)).filter(p => !isNaN(p));
-      
-  //     return {
-  //       id: product.id,
-  //       name: product.name,
-  //       description: product.description || null,
-  //       images: product.images || null,
-  //       type: product.type || null,
-  //       price: prices.length > 0 ? Math.min(...prices) : null,
-  //       priceRange: prices.length > 1 ? {
-  //         min: Math.min(...prices),
-  //         max: Math.max(...prices)
-  //       } : null,
-  //       variants: variants.map(v => ({
-  //         id: v.id,
-  //         price: parseFloat(v.price),
-  //         compare_at_price: v.compare_at_price ? parseFloat(v.compare_at_price) : null,
-  //         attributes: v.attributes,
-  //         is_active: v.is_active
-  //       }))
-  //     };
-  //   }) || [];
-  // };
-  
   // Helper function to format goal data
   const formatGoalData = (goal, includeDetails = false) => {
     const goalData = goal.toJSON();
@@ -131,3 +102,32 @@ module.exports = {
   buildAuthConditions,
   formatGoalData
 };
+
+
+ // Helper function to format product data
+  // const formatProducts = (products) => {
+  //   return products?.map((product) => {
+  //     const variants = product.variants || [];
+  //     const prices = variants.map(v => parseFloat(v.price)).filter(p => !isNaN(p));
+      
+  //     return {
+  //       id: product.id,
+  //       name: product.name,
+  //       description: product.description || null,
+  //       images: product.images || null,
+  //       type: product.type || null,
+  //       price: prices.length > 0 ? Math.min(...prices) : null,
+  //       priceRange: prices.length > 1 ? {
+  //         min: Math.min(...prices),
+  //         max: Math.max(...prices)
+  //       } : null,
+  //       variants: variants.map(v => ({
+  //         id: v.id,
+  //         price: parseFloat(v.price),
+  //         compare_at_price: v.compare_at_price ? parseFloat(v.compare_at_price) : null,
+  //         attributes: v.attributes,
+  //         is_active: v.is_active
+  //       }))
+  //     };
+  //   }) || [];
+  // };
