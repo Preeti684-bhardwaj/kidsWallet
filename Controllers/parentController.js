@@ -937,10 +937,10 @@ const createChild = asyncHandler(async (req, res, next) => {
 
     // Validate gender
     if (gender) {
-      const allowedGender = ["male", "female", "other"];
+      const allowedGender = ["boy", "girl", "other"];
       if (!allowedGender.includes(gender)) {
         return next(
-          new ErrorHandler("Invalid input. Allowed: male, female, other.", 400)
+          new ErrorHandler("Invalid input. Allowed: boy, girl, other.", 400)
         );
       }
     }
@@ -1449,10 +1449,10 @@ const updateChildProfile = asyncHandler(async (req, res, next) => {
 
     // Gender validation
     if (updateData.gender !== undefined) {
-      if (!["male", "female", "other"].includes(updateData.gender)) {
+      if (!["boy", "girl", "other"].includes(updateData.gender)) {
         await transaction.rollback();
         return next(
-          new ErrorHandler("Gender must be male, female, or other", 400)
+          new ErrorHandler("Gender must be boy, girl, or other", 400)
         );
       }
       child.gender = updateData.gender;

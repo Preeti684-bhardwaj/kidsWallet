@@ -27,7 +27,7 @@ const Child = sequelize.define('Child', {
       }
     },
     gender :{
-      type: DataTypes.ENUM('male','female','other'),
+      type: DataTypes.ENUM('male','female','boy','girl','other'),
       allowNull: true
     },
     profilePicture: {
