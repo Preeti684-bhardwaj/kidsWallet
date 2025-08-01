@@ -1477,7 +1477,11 @@ const updateChildProfile = asyncHandler(async (req, res, next) => {
     }
 
     if (updateData.isPublicAccount !== undefined) {
-      if (typeof updateData.isPublicAccount !== "boolean") {
+      if (updateData.isPublicAccount === 'true') {
+        updateData.isPublicAccount = true;
+      } else if (updateData.isPublicAccount === 'false') {
+        updateData.isPublicAccount = false;
+      } else if (typeof updateData.isPublicAccount !== "boolean") {
         await transaction.rollback();
         return next(new ErrorHandler("isPublicAccount must be a boolean", 400));
       }
@@ -1485,11 +1489,13 @@ const updateChildProfile = asyncHandler(async (req, res, next) => {
     }
 
     if (updateData.deviceSharingMode !== undefined) {
-      if (typeof updateData.deviceSharingMode !== "boolean") {
+      if (updateData.deviceSharingMode === 'true') {
+        updateData.deviceSharingMode = true;
+      } else if (updateData.deviceSharingMode === 'false') {
+        updateData.deviceSharingMode = false;
+      } else if (typeof updateData.deviceSharingMode !== "boolean") {
         await transaction.rollback();
-        return next(
-          new ErrorHandler("deviceSharingMode must be a boolean", 400)
-        );
+        return next(new ErrorHandler("deviceSharingMode must be a boolean", 400));
       }
       child.deviceSharingMode = updateData.deviceSharingMode;
     }
